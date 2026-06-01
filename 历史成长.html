@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>历史成长 - AI面镜</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script>
+    tailwind.config = { theme: { extend: {
+      colors: { indigo: { DEFAULT: '#6366F1' }, brandgreen: '#10B981', brandorange: '#F59E0B' },
+      fontFamily: { sans: ['Inter','PingFang SC','Microsoft YaHei','sans-serif'] },
+      boxShadow: { soft:'0 4px 20px rgba(99,102,241,0.08)', softlg:'0 10px 40px rgba(99,102,241,0.15)' },
+    }}};
+  </script>
+  <style>
+    body { background: #F9FAFB; color: #111827; }
+    .gradient-btn { background: linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%); transition: all .25s ease; }
+    .gradient-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(99,102,241,0.4); }
+    .gradient-text { background: linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  </style>
+</head>
+<body class="font-sans antialiased">
+
+  <nav class="bg-white border-b border-gray-100 sticky top-0 z-40">
+    <div class="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+      <a href="index.html" class="flex items-center gap-2">
+        <div class="w-9 h-9 rounded-xl gradient-btn flex items-center justify-center text-white text-lg">🪞</div>
+        <span class="text-xl font-bold">AI面镜</span>
+      </a>
+      <div class="flex items-center gap-4 text-sm">
+        <a href="历史成长.html" class="text-indigo font-medium">成长曲线</a>
+        <a href="个人中心.html" class="text-gray-500 hover:text-indigo">个人中心</a>
+        <button onclick="location.href='配置页.html'" class="gradient-btn text-white font-medium px-5 py-2 rounded-lg">+ 新面试</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="max-w-5xl mx-auto px-6 py-8">
+    <h1 class="text-2xl font-bold mb-6">我的成长轨迹 📈</h1>
+
+    <!-- 概览卡片 -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div class="bg-white rounded-2xl shadow-soft p-5">
+        <div class="text-sm text-gray-400 mb-1">累计面试</div>
+        <div class="text-3xl font-bold">12 <span class="text-base font-normal text-gray-400">次</span></div>
+      </div>
+      <div class="bg-white rounded-2xl shadow-soft p-5">
+        <div class="text-sm text-gray-400 mb-1">最新得分</div>
+        <div class="text-3xl font-bold gradient-text">78.5</div>
+      </div>
+      <div class="bg-white rounded-2xl shadow-soft p-5">
+        <div class="text-sm text-gray-400 mb-1">最佳得分</div>
+        <div class="text-3xl font-bold text-brandgreen">85.0</div>
+      </div>
+      <div class="bg-white rounded-2xl shadow-soft p-5">
+        <div class="text-sm text-gray-400 mb-1">较首次提升</div>
+        <div class="text-3xl font-bold text-brandgreen">+23.5</div>
+      </div>
+    </div>
+
+    <!-- 总分趋势 -->
+    <div class="bg-white rounded-2xl shadow-soft p-6 mb-6">
+      <h2 class="text-lg font-bold mb-4">综合得分趋势</h2>
+      <canvas id="trendChart" height="100"></canvas>
+    </div>
+
+    <!-- 各维度趋势 -->
+    <div class="bg-white rounded-2xl shadow-soft p-6 mb-6">
+      <h2 class="text-lg font-bold mb-4">各维度成长对比</h2>
+      <canvas id="dimChart" height="110"></canvas>
+    </div>
+
+    <!-- 历史记录列表 -->
+    <div class="bg-white rounded-2xl shadow-soft p-6">
+      <h2 class="text-lg font-bold mb-4">历史面试记录</h2>
+      <div class="space-y-2" id="historyList"></div>
+    </div>
+  </div>
+
+  <script>
+    // 总分趋势
+    new Chart(document.getElementById('trendChart'), {
+      type:'line',
+      data:{ labels:['1/2','1/5','1/8','1/10','1/12','1/15'],
+        datasets:[{ label:'综合得分', data:[55,62,68,72,79,78.5], borderColor:'#6366F1', backgroundColor:'rgba(99,102,241,0.1)', fill:true, tension:.3, pointRadius:5, pointBackgroundColor:'#6366F1' }]},
+      options:{ scales:{ y:{ min:0,max:100, grid:{color:'#F3F4F6'} }, x:{grid:{display:false}} }, plugins:{legend:{display:false}} }
+    });
+    // 维度对比(首次 vs 最新)
+    new Chart(document.getElementById('dimChart'), {
+      type:'bar',
+      data:{ labels:['岗位匹配','逻辑清晰','语言流畅','专业深度','自信心','价值表达'],
+        datasets:[
+          { label:'首次', data:[60,55,50,52,58,45], backgroundColor:'#E5E7EB', borderRadius:6 },
+          { label:'最新', data:[82,75,68,70,80,65], backgroundColor:'#6366F1', borderRadius:6 },
+        ]},
+      options:{ scales:{ y:{min:0,max:100,grid:{color:'#F3F4F6'}}, x:{grid:{display:false}} }, plugins:{legend:{position:'top'}} }
+    });
+    // 历史列表
+    const records = [
+      {date:'2025-01-15', job:'AI产品经理·中级', score:78.5, tag:'技术面'},
+      {date:'2025-01-12', job:'AI产品经理·中级', score:79, tag:'行为面'},
+      {date:'2025-01-10', job:'AI产品经理·中级', score:72, tag:'技术面'},
+      {date:'2025-01-08', job:'AI产品经理·初级', score:68, tag:'项目面'},
+      {date:'2025-01-05', job:'AI产品经理·初级', score:62, tag:'技术面'},
+    ];
+    const list = document.getElementById('historyList');
+    records.forEach(r=>{
+      const c = r.score>=80?'#10B981':r.score>=60?'#6366F1':'#F59E0B';
+      const el = document.createElement('div');
+      el.className='flex items-center justify-between p-4 rounded-xl hover:bg-gray-50 transition cursor-pointer';
+      el.onclick=()=>location.href='报告页.html';
+      el.innerHTML=`
+        <div class="flex items-center gap-4">
+          <div class="text-sm text-gray-400 w-20">${r.date}</div>
+          <div class="text-sm font-medium">${r.job}</div>
+          <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">${r.tag}</span>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="text-lg font-bold" style="color:${c}">${r.score}</span>
+          <span class="text-gray-300">查看报告 →</span>
+        </div>`;
+      list.appendChild(el);
+    });
+  </script>
+</body>
+</html>

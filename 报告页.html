@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>面试报告 - AI面镜</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: {
+        colors: { indigo: { DEFAULT: '#6366F1' }, brandgreen: '#10B981', brandorange: '#F59E0B' },
+        fontFamily: { sans: ['Inter','PingFang SC','Microsoft YaHei','sans-serif'] },
+        boxShadow: { soft:'0 4px 20px rgba(99,102,241,0.08)', softlg:'0 10px 40px rgba(99,102,241,0.15)' },
+      }},
+    };
+  </script>
+  <style>
+    body { background: #F9FAFB; color: #111827; }
+    .gradient-btn { background: linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%); transition: all .25s ease; }
+    .gradient-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(99,102,241,0.4); }
+    .gradient-text { background: linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+    .locked-blur { filter: blur(6px); user-select: none; pointer-events: none; }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+    .fade-up { animation: fadeUp .5s ease forwards; opacity:0; }
+  </style>
+</head>
+<body class="font-sans antialiased">
+
+  <!-- ===== 顶部导航 ===== -->
+  <nav class="bg-white border-b border-gray-100 sticky top-0 z-40">
+    <div class="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
+      <a href="index.html" class="flex items-center gap-2">
+        <div class="w-9 h-9 rounded-xl gradient-btn flex items-center justify-center text-white text-lg">🪞</div>
+        <span class="text-xl font-bold">AI面镜</span>
+      </a>
+      <div class="flex items-center gap-2">
+        <button class="text-sm text-gray-600 hover:text-indigo px-3 py-2 rounded-lg hover:bg-gray-50 transition flex items-center gap-1">📄 导出PDF <span class="text-xs text-gray-400">🔒</span></button>
+        <button class="text-sm text-gray-600 hover:text-indigo px-3 py-2 rounded-lg hover:bg-gray-50 transition">🔗 分享</button>
+        <button onclick="location.href='配置页.html'" class="gradient-btn text-white text-sm font-medium px-5 py-2 rounded-lg">🔄 再练一次</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="max-w-4xl mx-auto px-6 py-8">
+
+    <!-- ===== 报告标题 ===== -->
+    <div class="mb-6 fade-up">
+      <h1 class="text-2xl font-bold mb-1">面试报告</h1>
+      <p class="text-sm text-gray-400">AI产品经理 · 中级 · 技术面 &nbsp;|&nbsp; 2025-01-15 14:30 &nbsp;|&nbsp; 用时 18 分钟</p>
+    </div>
+
+    <!-- ===== 核心得分区 ===== -->
+    <div class="bg-white rounded-2xl shadow-soft p-7 mb-6 fade-up" style="animation-delay:.05s">
+      <div class="grid md:grid-cols-2 gap-8 items-center">
+        <!-- 左：综合得分 -->
+        <div class="text-center md:text-left">
+          <div class="text-sm text-gray-400 mb-1">综合得分</div>
+          <div class="flex items-end gap-3 justify-center md:justify-start mb-3">
+            <span class="text-6xl font-bold gradient-text">78.5</span>
+            <span class="text-lg font-medium text-gray-500 mb-2">/ 100</span>
+          </div>
+          <div class="flex items-center gap-2 justify-center md:justify-start mb-4">
+            <span class="bg-indigo/10 text-indigo px-3 py-1 rounded-full text-sm font-medium">中级水平</span>
+            <span class="text-brandgreen text-sm font-medium">↑ 较上次 +6.2</span>
+          </div>
+          <p class="text-sm text-gray-500 leading-relaxed">你的整体表现已达到中级水平，逻辑和岗位匹配度是亮点，价值表达和语言流畅度还有提升空间。</p>
+        </div>
+        <!-- 右：雷达图 -->
+        <div class="flex justify-center">
+          <div class="w-full max-w-[300px]">
+            <canvas id="radarChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== 6维度条形图 ===== -->
+    <div class="bg-white rounded-2xl shadow-soft p-7 mb-6 fade-up" style="animation-delay:.1s">
+      <h2 class="text-lg font-bold mb-5">各维度得分</h2>
+      <div class="grid md:grid-cols-2 gap-x-10 gap-y-4" id="dimBars"></div>
+    </div>
+
+    <!-- ===== 整体改进建议 ===== -->
+    <div class="bg-gradient-to-br from-indigo/5 to-purple-100/20 rounded-2xl p-7 mb-6 fade-up" style="animation-delay:.15s">
+      <h2 class="text-lg font-bold mb-4 flex items-center gap-2">💡 重点改进建议 <span class="text-xs font-normal text-gray-400">Top 3</span></h2>
+      <div class="space-y-3">
+        <div class="flex gap-3 bg-white rounded-xl p-4">
+          <div class="w-6 h-6 rounded-full gradient-btn text-white text-xs flex items-center justify-center flex-shrink-0">1</div>
+          <div class="text-sm text-gray-700"><b>多用量化结果</b>：你的多个回答提到了"提升效果"，但缺少具体数据。建议用"召回准确率从68%提升到85%"这样的量化表达增强说服力。</div>
+        </div>
+        <div class="flex gap-3 bg-white rounded-xl p-4">
+          <div class="w-6 h-6 rounded-full gradient-btn text-white text-xs flex items-center justify-center flex-shrink-0">2</div>
+          <div class="text-sm text-gray-700"><b>强化个人贡献</b>：回答中较多使用"我们"，建议明确区分团队工作和你个人主导的部分，突出"价值表达"。</div>
+        </div>
+        <div class="flex gap-3 bg-white rounded-xl p-4">
+          <div class="w-6 h-6 rounded-full gradient-btn text-white text-xs flex items-center justify-center flex-shrink-0">3</div>
+          <div class="text-sm text-gray-700"><b>放慢语速、减少口头禅</b>：检测到回答中有较多"呃""然后"，建议适当停顿组织语言，提升语言流畅度。</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== 逐题详细点评 ===== -->
+    <div class="mb-6 fade-up" style="animation-delay:.2s">
+      <h2 class="text-lg font-bold mb-4 px-1">📋 逐题详细点评</h2>
+      <div class="space-y-3" id="questionList"></div>
+    </div>
+
+    <!-- ===== 练习计划(会员锁定) ===== -->
+    <div class="bg-white rounded-2xl shadow-soft p-7 mb-6 relative overflow-hidden fade-up" style="animation-delay:.25s">
+      <h2 class="text-lg font-bold mb-1 flex items-center gap-2">🎯 为你定制的练习计划 <span class="bg-brandorange/10 text-brandorange text-xs px-2 py-0.5 rounded-full">会员专享</span></h2>
+      <p class="text-sm text-gray-400 mb-5">基于你的弱项「价值表达」生成</p>
+      <div class="locked-blur space-y-3">
+        <div class="bg-gray-50 rounded-xl p-4 text-sm">本周重点：练习用 STAR 结构突出个人成果，每天 3 道题</div>
+        <div class="bg-gray-50 rounded-xl p-4 flex justify-between items-center text-sm"><span>练习题1：描述一个你主导的项目，强调你的独特贡献</span><span class="text-indigo">开始 →</span></div>
+        <div class="bg-gray-50 rounded-xl p-4 flex justify-between items-center text-sm"><span>练习题2：你最有成就感的成果是什么？如何量化？</span><span class="text-indigo">开始 →</span></div>
+      </div>
+      <!-- 解锁遮罩 -->
+      <div class="absolute inset-0 flex flex-col items-center justify-center bg-white/40">
+        <div class="bg-white rounded-2xl shadow-softlg p-6 text-center max-w-xs">
+          <div class="text-3xl mb-2">🔒</div>
+          <h3 class="font-bold mb-1">升级会员，解锁练习计划</h3>
+          <p class="text-xs text-gray-400 mb-4">个性化练习计划 + 高分回答对比 + PDF导出</p>
+          <button class="gradient-btn text-white text-sm font-medium px-6 py-2.5 rounded-xl w-full">立即升级 ¥199/年</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== 底部操作 ===== -->
+    <div class="flex flex-col sm:flex-row gap-3 justify-center fade-up" style="animation-delay:.3s">
+      <button onclick="location.href='配置页.html'" class="gradient-btn text-white font-medium px-8 py-3 rounded-xl">🔄 用相同配置再练一次</button>
+      <button onclick="location.href='index.html'" class="bg-white border-2 border-gray-200 font-medium px-8 py-3 rounded-xl hover:border-indigo hover:text-indigo transition">查看历史成长曲线</button>
+    </div>
+
+  </div>
+
+  <script>
+    /* ---------- 维度数据 ---------- */
+    const dims = [
+      { name:'岗位匹配度', score:82, weight:'30%', color:'#10B981' },
+      { name:'逻辑清晰度', score:75, weight:'25%', color:'#6366F1' },
+      { name:'语言流畅度', score:68, weight:'15%', color:'#F59E0B' },
+      { name:'专业深度',   score:70, weight:'15%', color:'#6366F1' },
+      { name:'自信心',     score:80, weight:'10%', color:'#10B981' },
+      { name:'价值表达',   score:65, weight:'5%',  color:'#F59E0B' },
+    ];
+
+    /* ---------- 雷达图 ---------- */
+    new Chart(document.getElementById('radarChart'), {
+      type:'radar',
+      data:{
+        labels: dims.map(d=>d.name),
+        datasets:[{
+          label:'你的得分',
+          data: dims.map(d=>d.score),
+          backgroundColor:'rgba(99,102,241,0.15)',
+          borderColor:'#6366F1',
+          borderWidth:2,
+          pointBackgroundColor:'#6366F1',
+          pointRadius:4,
+        }]
+      },
+      options:{
+        scales:{ r:{ min:0, max:100, ticks:{ stepSize:20, color:'#9CA3AF', backdropColor:'transparent', font:{size:10} }, grid:{color:'#E5E7EB'}, angleLines:{color:'#E5E7EB'}, pointLabels:{ color:'#374151', font:{size:12} } } },
+        plugins:{ legend:{ display:false } },
+      }
+    });
+
+    /* ---------- 维度条形图 ---------- */
+    const dimBars = document.getElementById('dimBars');
+    dims.forEach(d=>{
+      const el = document.createElement('div');
+      el.innerHTML = `
+        <div class="flex justify-between items-center mb-1.5">
+          <span class="text-sm text-gray-600">${d.name} <span class="text-xs text-gray-300">权重${d.weight}</span></span>
+          <span class="text-sm font-bold" style="color:${d.color}">${d.score}</span>
+        </div>
+        <div class="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+          <div class="h-2.5 rounded-full transition-all duration-1000" style="width:0%;background:${d.color}" data-w="${d.score}"></div>
+        </div>`;
+      dimBars.appendChild(el);
+    });
+    // 条形图动画
+    setTimeout(()=>{ document.querySelectorAll('[data-w]').forEach(b=> b.style.width = b.dataset.w+'%'); }, 300);
+
+    /* ---------- 逐题点评数据 ---------- */
+    const qReviews = [
+      {
+        q:'请做一个自我介绍，重点说说你最有代表性的 AI 项目经历',
+        score:80,
+        good:['结构清晰，开门见山突出了核心项目','提到了量化成果（人工介入率降低40%）'],
+        bad:['可以再补充1-2句你在项目中的独特价值','结尾略仓促，可加一句与岗位的匹配总结'],
+        mine:'面试官好，我有3年AI产品经验，最近主导了一个企业知识库问答产品，从0到1搭建了基于RAG的检索问答系统，上线后将客服人工介入率降低了约40%。',
+        better:'面试官好，我是一名有3年经验的AI产品经理，专注于大模型应用落地。我最有代表性的项目是从0到1主导的企业知识库问答产品：我负责需求定义、RAG技术方案选型和效果评估体系搭建，上线3个月后将客服人工介入率从65%降至40%，月节省人力成本约8万元。这段经历让我深刻理解了如何平衡AI效果与业务价值，也正是贵司这个岗位所需要的能力。'
+      },
+      {
+        q:'你是如何解决 RAG 检索召回准确率低的问题？',
+        score:85,
+        good:['技术方案具体，提到了混合检索和重排序','给出了明确的量化提升（68%→85%）'],
+        bad:['可以补充为什么选择这个方案而非其他','缺少对方案局限性的思考'],
+        mine:'我们主要从两方面优化召回准确率：第一是引入混合检索，把向量检索和关键词BM25结合；第二是加了重排序模型，对召回的Top50做精排，最终把准确率从68%提升到了85%。',
+        better:'我从三个层次系统优化：首先做badcase分析，发现60%的失败是纯向量检索的语义漂移导致；于是引入混合检索（向量+BM25加权融合），解决了专有名词召回问题；再加入重排序模型对Top50精排。最终准确率从68%提升到85%。同时我也意识到该方案在长尾query上仍有不足，下一步计划引入query改写来进一步优化。'
+      },
+      {
+        q:'大模型产品"答非所问"，你会如何系统定位和解决？',
+        score:72,
+        good:['提到了badcase分类的思路','覆盖了检索、模型、prompt三个层面'],
+        bad:['回答偏简略，缺少具体的指标和方法','没有提到如何防止问题复发'],
+        mine:'我会先复现问题，把badcase分类，看是检索没召回到、还是模型理解偏差、还是prompt设计问题，然后针对性优化。',
+        better:'我会按"度量→定位→解决→防复发"四步走：先建立量化指标（如答非所问率、用户负反馈率）；再对badcase归因分类（检索缺失/模型幻觉/prompt歧义），通常用日志+人工标注定位主因；针对性优化后，建立回归测试集防止复发，并上线持续监控看板。'
+      },
+    ];
+
+    /* ---------- 渲染逐题点评 ---------- */
+    const qList = document.getElementById('questionList');
+    qReviews.forEach((item, idx)=>{
+      const scoreColor = item.score>=80?'#10B981':item.score>=60?'#6366F1':'#F59E0B';
+      const card = document.createElement('div');
+      card.className = 'bg-white rounded-2xl shadow-soft overflow-hidden';
+      card.innerHTML = `
+        <div class="flex items-center justify-between p-5 cursor-pointer toggle-head">
+          <div class="flex items-center gap-3 flex-1">
+            <span class="text-xs text-gray-400">Q${idx+1}</span>
+            <span class="text-sm font-medium text-gray-700">${item.q}</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-lg font-bold" style="color:${scoreColor}">${item.score}</span>
+            <span class="toggle-icon text-gray-400 transition-transform">▼</span>
+          </div>
+        </div>
+        <div class="toggle-body hidden px-5 pb-5 border-t border-gray-50 pt-4">
+          <div class="grid md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <div class="text-xs font-semibold text-brandgreen mb-2">✅ 亮点</div>
+              <ul class="space-y-1.5">${item.good.map(g=>`<li class="text-sm text-gray-600 flex gap-1.5"><span class="text-brandgreen">·</span>${g}</li>`).join('')}</ul>
+            </div>
+            <div>
+              <div class="text-xs font-semibold text-brandorange mb-2">⚠️ 改进点</div>
+              <ul class="space-y-1.5">${item.bad.map(b=>`<li class="text-sm text-gray-600 flex gap-1.5"><span class="text-brandorange">·</span>${b}</li>`).join('')}</ul>
+            </div>
+          </div>
+          <div class="grid md:grid-cols-2 gap-4">
+            <div>
+              <div class="text-xs font-semibold text-gray-500 mb-2">📝 你的回答</div>
+              <div class="bg-gray-50 rounded-xl p-4 text-sm text-gray-600 leading-relaxed">${item.mine}</div>
+            </div>
+            <div>
+              <div class="text-xs font-semibold text-indigo mb-2 flex items-center gap-1">⭐ 高分参考 <span class="bg-brandorange/10 text-brandorange text-[10px] px-1.5 py-0.5 rounded">会员</span></div>
+              <div class="relative">
+                <div class="bg-indigo/5 rounded-xl p-4 text-sm text-gray-600 leading-relaxed locked-blur">${item.better}</div>
+                <div class="absolute inset-0 flex items-center justify-center">
+                  <button class="bg-white shadow-softlg text-indigo text-xs font-medium px-4 py-2 rounded-lg border border-indigo/20">🔒 升级查看高分回答</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      qList.appendChild(card);
+
+      // 折叠交互
+      const head = card.querySelector('.toggle-head');
+      const body = card.querySelector('.toggle-body');
+      const icon = card.querySelector('.toggle-icon');
+      head.addEventListener('click', ()=>{
+        body.classList.toggle('hidden');
+        icon.style.transform = body.classList.contains('hidden') ? 'rotate(0)' : 'rotate(180deg)';
+      });
+      // 默认展开第一题
+      if (idx===0){ body.classList.remove('hidden'); icon.style.transform='rotate(180deg)'; }
+    });
+  </script>
+
+</body>
+</html>

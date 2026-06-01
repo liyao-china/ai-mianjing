@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>个人中心 - AI面镜</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: {
+      colors: { indigo: { DEFAULT: '#6366F1' }, brandgreen: '#10B981', brandorange: '#F59E0B' },
+      fontFamily: { sans: ['Inter','PingFang SC','Microsoft YaHei','sans-serif'] },
+      boxShadow: { soft:'0 4px 20px rgba(99,102,241,0.08)', softlg:'0 10px 40px rgba(99,102,241,0.15)' },
+    }}};
+  </script>
+  <style>
+    body { background: #F9FAFB; color: #111827; }
+    .gradient-btn { background: linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%); transition: all .25s ease; }
+    .gradient-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(99,102,241,0.4); }
+    .gradient-text { background: linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+    .vip-card { background: linear-gradient(135deg,#1F2937 0%,#4338CA 100%); }
+  </style>
+</head>
+<body class="font-sans antialiased">
+
+  <nav class="bg-white border-b border-gray-100 sticky top-0 z-40">
+    <div class="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+      <a href="index.html" class="flex items-center gap-2">
+        <div class="w-9 h-9 rounded-xl gradient-btn flex items-center justify-center text-white text-lg">🪞</div>
+        <span class="text-xl font-bold">AI面镜</span>
+      </a>
+      <div class="flex items-center gap-4 text-sm">
+        <a href="历史成长.html" class="text-gray-500 hover:text-indigo">成长曲线</a>
+        <a href="个人中心.html" class="text-indigo font-medium">个人中心</a>
+        <button onclick="location.href='配置页.html'" class="gradient-btn text-white font-medium px-5 py-2 rounded-lg">+ 新面试</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="max-w-5xl mx-auto px-6 py-8">
+    <div class="grid md:grid-cols-[260px_1fr] gap-6">
+
+      <!-- 左侧菜单 -->
+      <aside>
+        <div class="bg-white rounded-2xl shadow-soft p-6 mb-4 text-center">
+          <div class="w-20 h-20 rounded-full bg-indigo/10 flex items-center justify-center text-3xl text-indigo font-bold mx-auto mb-3">戴</div>
+          <h3 class="font-bold text-lg">戴同学</h3>
+          <p class="text-sm text-gray-400">138****8888</p>
+          <span class="inline-block mt-2 bg-gray-100 text-gray-500 text-xs px-3 py-1 rounded-full">免费用户</span>
+        </div>
+        <div class="bg-white rounded-2xl shadow-soft p-2">
+          <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-xl bg-indigo/5 text-indigo text-sm font-medium">👤 账户信息</a>
+          <a href="历史成长.html" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 text-sm text-gray-600">📈 历史成长</a>
+          <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 text-sm text-gray-600">💳 我的会员</a>
+          <a href="简历上传.html" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 text-sm text-gray-600">📄 简历管理</a>
+          <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 text-sm text-gray-600">⚙️ 设置</a>
+          <a href="登录页.html" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 text-sm text-brandorange">🚪 退出登录</a>
+        </div>
+      </aside>
+
+      <!-- 右侧内容 -->
+      <main>
+        <!-- 会员升级卡 -->
+        <div class="vip-card rounded-2xl p-7 mb-6 text-white relative overflow-hidden">
+          <div class="relative z-10">
+            <h2 class="text-xl font-bold mb-1">✨ 升级会员，解锁全部能力</h2>
+            <p class="text-white/70 text-sm mb-4">无限次面试 · 高分回答对比 · 个性化练习计划 · PDF导出</p>
+            <button class="bg-white text-indigo font-medium px-6 py-2.5 rounded-xl hover:scale-105 transition">立即升级 ¥199/年</button>
+          </div>
+          <div class="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full -mr-16 -mt-16"></div>
+        </div>
+
+        <!-- 使用统计 -->
+        <div class="bg-white rounded-2xl shadow-soft p-6 mb-6">
+          <h2 class="text-lg font-bold mb-4">使用概况</h2>
+          <div class="grid grid-cols-3 gap-4">
+            <div class="text-center"><div class="text-2xl font-bold gradient-text">12</div><div class="text-sm text-gray-400 mt-1">累计面试</div></div>
+            <div class="text-center"><div class="text-2xl font-bold gradient-text">3.5h</div><div class="text-sm text-gray-400 mt-1">练习时长</div></div>
+            <div class="text-center"><div class="text-2xl font-bold gradient-text">+23.5</div><div class="text-sm text-gray-400 mt-1">分数提升</div></div>
+          </div>
+        </div>
+
+        <!-- 账户信息 -->
+        <div class="bg-white rounded-2xl shadow-soft p-6">
+          <h2 class="text-lg font-bold mb-4">账户信息</h2>
+          <div class="space-y-4">
+            <div class="flex items-center justify-between py-2 border-b border-gray-50">
+              <span class="text-sm text-gray-400">昵称</span><span class="text-sm font-medium">戴同学 <button class="text-indigo text-xs ml-2">编辑</button></span>
+            </div>
+            <div class="flex items-center justify-between py-2 border-b border-gray-50">
+              <span class="text-sm text-gray-400">手机号</span><span class="text-sm font-medium">138****8888</span>
+            </div>
+            <div class="flex items-center justify-between py-2 border-b border-gray-50">
+              <span class="text-sm text-gray-400">目标岗位</span><span class="text-sm font-medium">AI产品经理 <button class="text-indigo text-xs ml-2">编辑</button></span>
+            </div>
+            <div class="flex items-center justify-between py-2 border-b border-gray-50">
+              <span class="text-sm text-gray-400">简历</span><span class="text-sm font-medium text-brandgreen">已上传 <button class="text-indigo text-xs ml-2">更新</button></span>
+            </div>
+            <div class="flex items-center justify-between py-2">
+              <span class="text-sm text-gray-400">会员状态</span><span class="text-sm font-medium">免费用户</span>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

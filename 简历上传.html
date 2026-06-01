@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>完善背景信息 - AI面镜</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: {
+      colors: { indigo: { DEFAULT: '#6366F1' }, brandgreen: '#10B981', brandorange: '#F59E0B' },
+      fontFamily: { sans: ['Inter','PingFang SC','Microsoft YaHei','sans-serif'] },
+      boxShadow: { soft:'0 4px 20px rgba(99,102,241,0.08)', softlg:'0 10px 40px rgba(99,102,241,0.15)' },
+    }}};
+  </script>
+  <style>
+    body { background: #F9FAFB; color: #111827; }
+    .gradient-btn { background: linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%); transition: all .25s ease; }
+    .gradient-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(99,102,241,0.4); }
+    .gradient-text { background: linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+    .upload-zone { border:2px dashed #C7D2FE; transition: all .2s; }
+    .upload-zone:hover, .upload-zone.dragover { border-color:#6366F1; background:#EEF2FF; }
+  </style>
+</head>
+<body class="font-sans antialiased">
+
+  <nav class="bg-white border-b border-gray-100">
+    <div class="max-w-3xl mx-auto px-6 h-16 flex items-center justify-between">
+      <a href="index.html" class="flex items-center gap-2">
+        <div class="w-9 h-9 rounded-xl gradient-btn flex items-center justify-center text-white text-lg">🪞</div>
+        <span class="text-xl font-bold">AI面镜</span>
+      </a>
+      <a href="配置页.html" class="text-sm text-gray-400 hover:text-indigo">跳过 →</a>
+    </div>
+  </nav>
+
+  <div class="max-w-3xl mx-auto px-6 py-10">
+    <div class="text-center mb-8">
+      <h1 class="text-3xl font-bold mb-2">完善你的<span class="gradient-text">背景信息</span></h1>
+      <p class="text-gray-500">这些信息将用于生成更贴合你的个性化面试题目</p>
+    </div>
+
+    <!-- 简历上传 -->
+    <div class="bg-white rounded-2xl shadow-soft p-7 mb-6">
+      <h2 class="text-lg font-bold mb-1 flex items-center gap-2">📄 上传简历 <span class="bg-brandgreen/10 text-brandgreen text-xs px-2 py-0.5 rounded-full">强烈推荐</span></h2>
+      <p class="text-sm text-gray-400 mb-4">上传后 AI 会针对你的项目和技术栈出题，效果更佳</p>
+      <label class="upload-zone rounded-2xl p-10 flex flex-col items-center justify-center cursor-pointer block" id="uploadZone">
+        <div class="text-5xl mb-3">📤</div>
+        <p class="font-medium mb-1" id="uploadText">点击或拖拽上传简历</p>
+        <p class="text-xs text-gray-400">支持 PDF / Word，大小不超过 10MB</p>
+        <input type="file" class="hidden" accept=".pdf,.doc,.docx" id="fileInput" />
+      </label>
+      <p class="text-xs text-gray-400 mt-3">🔒 你的简历仅用于生成题目，30 天后自动删除，绝不外传</p>
+    </div>
+
+    <!-- 背景问卷 -->
+    <div class="bg-white rounded-2xl shadow-soft p-7 mb-6">
+      <h2 class="text-lg font-bold mb-4">✍️ 或手动填写关键信息</h2>
+      <div class="space-y-4">
+        <div>
+          <label class="text-sm text-gray-600 mb-1.5 block">工作年限</label>
+          <select class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-indigo focus:outline-none">
+            <option>在校 / 实习</option><option>应届毕业</option><option>1-3 年</option><option>3-5 年</option><option>5-8 年</option><option>8 年以上</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-sm text-gray-600 mb-1.5 block">目标岗位</label>
+          <input type="text" placeholder="如：AI产品经理" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-indigo focus:outline-none" />
+        </div>
+        <div>
+          <label class="text-sm text-gray-600 mb-1.5 block">技术栈 / 技能（可多个，逗号分隔）</label>
+          <input type="text" placeholder="如：PyTorch, LangChain, RAG, 云服务" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-indigo focus:outline-none" />
+        </div>
+        <div>
+          <label class="text-sm text-gray-600 mb-1.5 block">目标公司（选填）</label>
+          <input type="text" placeholder="如：字节跳动 / 创业公司" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-indigo focus:outline-none" />
+        </div>
+      </div>
+    </div>
+
+    <button onclick="location.href='配置页.html'" class="w-full gradient-btn text-white font-medium py-3.5 rounded-xl">保存并开始配置面试 →</button>
+  </div>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const zone = document.getElementById('uploadZone');
+    const txt = document.getElementById('uploadText');
+    fileInput.addEventListener('change', ()=>{
+      if(fileInput.files[0]){ txt.textContent = '✅ 已选择：' + fileInput.files[0].name; }
+    });
+    zone.addEventListener('dragover', e=>{ e.preventDefault(); zone.classList.add('dragover'); });
+    zone.addEventListener('dragleave', ()=> zone.classList.remove('dragover'));
+    zone.addEventListener('drop', e=>{
+      e.preventDefault(); zone.classList.remove('dragover');
+      if(e.dataTransfer.files[0]){ fileInput.files = e.dataTransfer.files; txt.textContent = '✅ 已选择：' + e.dataTransfer.files[0].name; }
+    });
+  </script>
+</body>
+</html>

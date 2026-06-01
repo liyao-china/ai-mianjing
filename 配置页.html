@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>配置面试 - AI面镜</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            indigo: { DEFAULT: '#6366F1' },
+            brandgreen: '#10B981',
+            brandorange: '#F59E0B',
+          },
+          fontFamily: { sans: ['Inter', 'PingFang SC', 'Microsoft YaHei', 'sans-serif'] },
+          boxShadow: {
+            soft: '0 4px 20px rgba(99,102,241,0.08)',
+            softlg: '0 10px 40px rgba(99,102,241,0.15)',
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    body { background: #F9FAFB; color: #111827; }
+    .gradient-btn {
+      background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+      transition: all .25s ease;
+    }
+    .gradient-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(99,102,241,0.4); }
+    .gradient-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }
+    .gradient-text {
+      background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+      -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    /* 选项卡片选中态 */
+    .option-card {
+      border: 2px solid #E5E7EB; transition: all .2s ease; cursor: pointer;
+    }
+    .option-card:hover { border-color: #C7D2FE; }
+    .option-card.selected {
+      border-color: #6366F1; background: #EEF2FF;
+    }
+    .option-card.selected .check { opacity: 1; }
+    .check { opacity: 0; transition: opacity .2s; }
+  </style>
+</head>
+<body class="font-sans antialiased">
+
+  <!-- ===== 顶部导航 ===== -->
+  <nav class="bg-white border-b border-gray-100 sticky top-0 z-50">
+    <div class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+      <a href="index.html" class="flex items-center gap-2">
+        <div class="w-9 h-9 rounded-xl gradient-btn flex items-center justify-center text-white text-lg">🪞</div>
+        <span class="text-xl font-bold">AI面镜</span>
+      </a>
+      <div class="flex items-center gap-3">
+        <span class="text-sm text-gray-400">余额：今日剩余 1 次</span>
+        <div class="w-9 h-9 rounded-full bg-indigo/10 flex items-center justify-center text-indigo font-medium">戴</div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="max-w-6xl mx-auto px-6 py-10">
+    <div class="grid md:grid-cols-[220px_1fr] gap-8">
+
+      <!-- ===== 左侧步骤导航 ===== -->
+      <aside class="hidden md:block">
+        <div class="bg-white rounded-2xl shadow-soft p-6 sticky top-24">
+          <h3 class="text-sm font-semibold text-gray-400 mb-5">配置进度</h3>
+          <div class="space-y-1">
+            <!-- 步骤1 -->
+            <div class="flex items-center gap-3 py-2">
+              <div class="w-7 h-7 rounded-full bg-brandgreen text-white text-xs flex items-center justify-center">✓</div>
+              <div>
+                <div class="text-sm font-medium">背景信息</div>
+                <div class="text-xs text-gray-400">已完成</div>
+              </div>
+            </div>
+            <div class="ml-3.5 h-4 border-l-2 border-gray-100"></div>
+            <!-- 步骤2 -->
+            <div class="flex items-center gap-3 py-2">
+              <div class="w-7 h-7 rounded-full gradient-btn text-white text-xs flex items-center justify-center">2</div>
+              <div>
+                <div class="text-sm font-medium text-indigo">面试配置</div>
+                <div class="text-xs text-gray-400">进行中</div>
+              </div>
+            </div>
+            <div class="ml-3.5 h-4 border-l-2 border-gray-100"></div>
+            <!-- 步骤3 -->
+            <div class="flex items-center gap-3 py-2">
+              <div class="w-7 h-7 rounded-full bg-gray-100 text-gray-400 text-xs flex items-center justify-center">3</div>
+              <div>
+                <div class="text-sm font-medium text-gray-400">设备检测</div>
+                <div class="text-xs text-gray-400">待开始</div>
+              </div>
+            </div>
+            <div class="ml-3.5 h-4 border-l-2 border-gray-100"></div>
+            <!-- 步骤4 -->
+            <div class="flex items-center gap-3 py-2">
+              <div class="w-7 h-7 rounded-full bg-gray-100 text-gray-400 text-xs flex items-center justify-center">4</div>
+              <div>
+                <div class="text-sm font-medium text-gray-400">开始面试</div>
+                <div class="text-xs text-gray-400">待开始</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- ===== 右侧配置主体 ===== -->
+      <main>
+        <div class="mb-8">
+          <h1 class="text-3xl font-bold mb-2">开始一场新的<span class="gradient-text">模拟面试</span></h1>
+          <p class="text-gray-500">根据你的目标定制专属面试，所有选项都会影响题目和评分权重</p>
+        </div>
+
+        <!-- 模块1：选择岗位 -->
+        <section class="bg-white rounded-2xl shadow-soft p-6 mb-6">
+          <div class="flex items-center gap-2 mb-4">
+            <span class="text-lg">🎯</span>
+            <h2 class="text-lg font-bold">选择目标岗位</h2>
+            <span class="text-brandorange text-sm">*必选</span>
+          </div>
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-3" data-group="job" data-mode="single">
+            <div class="option-card rounded-xl p-4 relative" data-value="ai-pm">
+              <span class="check absolute top-3 right-3 text-indigo">✓</span>
+              <div class="text-2xl mb-1">📦</div>
+              <div class="font-medium">AI产品经理</div>
+              <div class="text-xs text-gray-400 mt-0.5">策略/平台/应用</div>
+            </div>
+            <div class="option-card rounded-xl p-4 relative" data-value="ai-ops">
+              <span class="check absolute top-3 right-3 text-indigo">✓</span>
+              <div class="text-2xl mb-1">📊</div>
+              <div class="font-medium">AI运营</div>
+              <div class="text-xs text-gray-400 mt-0.5">数据/AIGC内容</div>
+            </div>
+            <div class="option-card rounded-xl p-4 relative" data-value="agent">
+              <span class="check absolute top-3 right-3 text-indigo">✓</span>
+              <div class="text-2xl mb-1">🤖</div>
+              <div class="font-medium">Agent开发</div>
+              <div class="text-xs text-gray-400 mt-0.5">智能体/多框架</div>
+            </div>
+            <div class="option-card rounded-xl p-4 relative" data-value="algo">
+              <span class="check absolute top-3 right-3 text-indigo">✓</span>
+              <div class="text-2xl mb-1">🧠</div>
+              <div class="font-medium">算法工程师</div>
+              <div class="text-xs text-gray-400 mt-0.5">NLP/CV/多模态</div>
+            </div>
+            <div class="option-card rounded-xl p-4 relative" data-value="frontend">
+              <span class="check absolute top-3 right-3 text-indigo">✓</span>
+              <div class="text-2xl mb-1">🎨</div>
+              <div class="font-medium">前端开发</div>
+              <div class="text-xs text-gray-400 mt-0.5">AI应用交互</div>
+            </div>
+            <div class="option-card rounded-xl p-4 relative" data-value="backend">
+              <span class="check absolute top-3 right-3 text-indigo">✓</span>
+              <div class="text-2xl mb-1">⚙️</div>
+              <div class="font-medium">后端开发</div>
+              <div class="text-xs text-gray-400 mt-0.5">AI服务/部署</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 模块2：选择职级 -->
+                <!-- 模块2：选择职级 -->
+        <section class="bg-white rounded-2xl shadow-soft p-6 mb-6">
+          <div class="flex items-center gap-2 mb-4">
+            <span class="text-lg">📈</span>
+            <h2 class="text-lg font-bold">选择职级</h2>
+            <span class="text-brandorange text-sm">*必选</span>
+          </div>
+          <div class="flex flex-wrap gap-3" data-group="level" data-mode="single">
+            <div class="option-card rounded-xl px-6 py-3 relative" data-value="intern">
+              <div class="font-medium">实习</div><div class="text-xs text-gray-400">在校实习</div>
+            </div>
+            <div class="option-card rounded-xl px-6 py-3 relative" data-value="campus">
+              <div class="font-medium">校招</div><div class="text-xs text-gray-400">应届毕业</div>
+            </div>
+            <div class="option-card rounded-xl px-6 py-3 relative" data-value="junior">
+              <div class="font-medium">初级</div><div class="text-xs text-gray-400">1-3年</div>
+            </div>
+            <div class="option-card rounded-xl px-6 py-3 relative" data-value="mid">
+              <div class="font-medium">中级</div><div class="text-xs text-gray-400">3-5年</div>
+            </div>
+            <div class="option-card rounded-xl px-6 py-3 relative" data-value="senior">
+              <div class="font-medium">高级</div><div class="text-xs text-gray-400">5-8年</div>
+            </div>
+            <div class="option-card rounded-xl px-6 py-3 relative" data-value="expert">
+              <div class="font-medium">专家</div><div class="text-xs text-gray-400">8年以上</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 模块3：面试类型(多选) -->
+        <section class="bg-white rounded-2xl shadow-soft p-6 mb-6">
+          <div class="flex items-center gap-2 mb-4">
+            <span class="text-lg">📋</span>
+            <h2 class="text-lg font-bold">面试类型</h2>
+            <span class="text-gray-400 text-sm">可多选</span>
+          </div>
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-3" data-group="type" data-mode="multi">
+            <div class="option-card rounded-xl p-4 relative" data-value="behavior">
+              <span class="check absolute top-3 right-3 text-indigo">✓</span>
+              <div class="font-medium">行为面试</div><div class="text-xs text-gray-400 mt-0.5">STAR/软技能</div>
+            </div>
+            <div class="option-card rounded-xl p-4 relative" data-value="tech">
+              <span class="check absolute top-3 right-3 text-indigo">✓</span>
+              <div class="font-medium">技术面试</div><div class="text-xs text-gray-400 mt-0.5">原理/系统设计</div>
+            </div>
+            <div class="option-card rounded-xl p-4 relative" data-value="project">
+              <span class="check absolute top-3 right-3 text-indigo">✓</span>
+              <div class="font-medium">项目深度面</div><div class="text-xs text-gray-400 mt-0.5">围绕简历追问</div>
+            </div>
+            <div class="option-card rounded-xl p-4 relative" data-value="pressure">
+              <span class="check absolute top-3 right-3 text-indigo">✓</span>
+              <div class="font-medium">压力面试</div><div class="text-xs text-gray-400 mt-0.5">限时/质疑</div>
+            </div>
+            <div class="option-card rounded-xl p-4 relative" data-value="case">
+              <span class="check absolute top-3 right-3 text-indigo">✓</span>
+              <div class="font-medium">案例设计面</div><div class="text-xs text-gray-400 mt-0.5">开放性问题</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 模块4：面试时长 -->
+        <section class="bg-white rounded-2xl shadow-soft p-6 mb-6">
+          <div class="flex items-center gap-2 mb-4">
+            <span class="text-lg">⏱️</span>
+            <h2 class="text-lg font-bold">面试时长</h2>
+          </div>
+          <div class="grid grid-cols-3 gap-3" data-group="duration" data-mode="single">
+            <div class="option-card rounded-xl p-4 relative text-center" data-value="quick">
+              <div class="font-medium">快速版</div><div class="text-xs text-gray-400 mt-0.5">10分钟·4-5题</div>
+            </div>
+            <div class="option-card rounded-xl p-4 relative text-center" data-value="standard">
+              <div class="font-medium">标准版</div><div class="text-xs text-gray-400 mt-0.5">20分钟·6-8题</div>
+            </div>
+            <div class="option-card rounded-xl p-4 relative text-center" data-value="deep">
+              <div class="font-medium">深度版</div><div class="text-xs text-gray-400 mt-0.5">40分钟·10-12题</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 模块5：回答方式 -->
+        <section class="bg-white rounded-2xl shadow-soft p-6 mb-6">
+          <div class="flex items-center gap-2 mb-4">
+            <span class="text-lg">🎙️</span>
+            <h2 class="text-lg font-bold">回答方式</h2>
+          </div>
+          <div class="grid grid-cols-2 gap-3" data-group="input" data-mode="single">
+            <div class="option-card rounded-xl p-4 relative" data-value="voice">
+              <span class="absolute top-3 right-3 bg-brandgreen text-white text-xs px-2 py-0.5 rounded-full">推荐</span>
+              <div class="text-2xl mb-1">🎙️</div>
+              <div class="font-medium">语音回答</div><div class="text-xs text-gray-400 mt-0.5">更贴近真实面试</div>
+            </div>
+            <div class="option-card rounded-xl p-4 relative" data-value="text">
+              <div class="text-2xl mb-1">⌨️</div>
+              <div class="font-medium">文字回答</div><div class="text-xs text-gray-400 mt-0.5">适合安静环境</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 底部操作栏 -->
+        <div class="flex items-center justify-between bg-white rounded-2xl shadow-soft p-5 sticky bottom-4">
+          <div class="text-sm text-gray-500">
+            <span id="summary">请完成必选项配置</span>
+          </div>
+          <button id="startBtn" class="gradient-btn text-white font-medium px-8 py-3 rounded-xl" disabled>
+            开始面试 →
+          </button>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- ===== 交互脚本 ===== -->
+  <script>
+    const selections = { job: null, level: null, type: [], duration: 'standard', input: 'voice' };
+
+    // 默认选中标准版和语音
+    document.querySelector('[data-group="duration"] [data-value="standard"]').classList.add('selected');
+    document.querySelector('[data-group="input"] [data-value="voice"]').classList.add('selected');
+
+    document.querySelectorAll('.option-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const group = card.closest('[data-group]');
+        const groupName = group.dataset.group;
+        const mode = group.dataset.mode;
+        const value = card.dataset.value;
+
+        if (mode === 'single') {
+          group.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
+          card.classList.add('selected');
+          selections[groupName] = value;
+        } else {
+          card.classList.toggle('selected');
+          if (card.classList.contains('selected')) {
+            selections[groupName].push(value);
+          } else {
+            selections[groupName] = selections[groupName].filter(v => v !== value);
+          }
+        }
+        updateState();
+      });
+    });
+
+    const jobNames = { 'ai-pm':'AI产品经理','ai-ops':'AI运营','agent':'Agent开发','algo':'算法工程师','frontend':'前端开发','backend':'后端开发' };
+    const levelNames = { intern:'实习', campus:'校招', junior:'初级', mid:'中级', senior:'高级', expert:'专家' };
+    const durNames = { quick:'快速版', standard:'标准版', deep:'深度版' };
+
+    function updateState() {
+      const btn = document.getElementById('startBtn');
+      const summary = document.getElementById('summary');
+      const ready = selections.job && selections.level;
+      btn.disabled = !ready;
+
+      if (ready) {
+        let txt = `${jobNames[selections.job]} · ${levelNames[selections.level]} · ${durNames[selections.duration]}`;
+        if (selections.type.length) txt += ` · ${selections.type.length}种类型`;
+        summary.textContent = txt;
+        summary.classList.add('text-indigo', 'font-medium');
+      } else {
+        summary.textContent = '请先选择岗位和职级（必选）';
+        summary.classList.remove('text-indigo', 'font-medium');
+      }
+    }
+
+      document.getElementById('startBtn').addEventListener('click', () => {
+      if (!selections.job || !selections.level) return;
+      // 把配置存到本地，供面试页读取
+      localStorage.setItem('interviewConfig', JSON.stringify(selections));
+      // 跳转到面试页
+      window.location.href = '面试页.html';
+    });
+
+  </script>
+
+</body>
+</html>
