@@ -6,6 +6,7 @@
   <title>历史成长 - AI面镜</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
     tailwind.config = { theme: { extend: {
       colors: { indigo: { DEFAULT: '#6366F1' }, brandgreen: '#10B981', brandorange: '#F59E0B' },
@@ -78,50 +79,156 @@
     </div>
   </div>
 
-  <script>
-    // 总分趋势
-    new Chart(document.getElementById('trendChart'), {
-      type:'line',
-      data:{ labels:['1/2','1/5','1/8','1/10','1/12','1/15'],
-        datasets:[{ label:'综合得分', data:[55,62,68,72,79,78.5], borderColor:'#6366F1', backgroundColor:'rgba(99,102,241,0.1)', fill:true, tension:.3, pointRadius:5, pointBackgroundColor:'#6366F1' }]},
-      options:{ scales:{ y:{ min:0,max:100, grid:{color:'#F3F4F6'} }, x:{grid:{display:false}} }, plugins:{legend:{display:false}} }
-    });
-    // 维度对比(首次 vs 最新)
-    new Chart(document.getElementById('dimChart'), {
-      type:'bar',
-      data:{ labels:['岗位匹配','逻辑清晰','语言流畅','专业深度','自信心','价值表达'],
-        datasets:[
-          { label:'首次', data:[60,55,50,52,58,45], backgroundColor:'#E5E7EB', borderRadius:6 },
-          { label:'最新', data:[82,75,68,70,80,65], backgroundColor:'#6366F1', borderRadius:6 },
-        ]},
-      options:{ scales:{ y:{min:0,max:100,grid:{color:'#F3F4F6'}}, x:{grid:{display:false}} }, plugins:{legend:{position:'top'}} }
-    });
-    // 历史列表
-    const records = [
-      {date:'2025-01-15', job:'AI产品经理·中级', score:78.5, tag:'技术面'},
-      {date:'2025-01-12', job:'AI产品经理·中级', score:79, tag:'行为面'},
-      {date:'2025-01-10', job:'AI产品经理·中级', score:72, tag:'技术面'},
-      {date:'2025-01-08', job:'AI产品经理·初级', score:68, tag:'项目面'},
-      {date:'2025-01-05', job:'AI产品经理·初级', score:62, tag:'技术面'},
-    ];
-    const list = document.getElementById('historyList');
-    records.forEach(r=>{
-      const c = r.score>=80?'#10B981':r.score>=60?'#6366F1':'#F59E0B';
-      const el = document.createElement('div');
-      el.className='flex items-center justify-between p-4 rounded-xl hover:bg-gray-50 transition cursor-pointer';
-      el.onclick=()=>location.href='报告页.html';
-      el.innerHTML=`
-        <div class="flex items-center gap-4">
-          <div class="text-sm text-gray-400 w-20">${r.date}</div>
-          <div class="text-sm font-medium">${r.job}</div>
-          <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">${r.tag}</span>
-        </div>
-        <div class="flex items-center gap-3">
-          <span class="text-lg font-bold" style="color:${c}">${r.score}</span>
-          <span class="text-gray-300">查看报告 →</span>
+    <script>
+    // 读取真实历史
+        const SUPABASE_URL = "你的Project URL";
+    const SUPABASE_KEY = "你的anon public key";
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let history = [];
+
+    async function loadHistory(){
+      const { data: { user } } = await supabaseClient.auth.getUser();
+      if(user){
+        // 已登录：读云端
+        const { data, error } = await supabaseClient
+          .from('interview_records')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if(!error && data){
+          history = data.map(r => ({
+            id: r.id,
+            date: new Date(r.created_at).toLocaleString('zh-CN'),
+            jobName: r.job_name,
+            levelName: r.level_name,
+            typeList: r.type_list,
+            totalScore: r.total_score,
+            scores: r.scores,
+            report: r.report
+          }));
+        }
+      } else {
+        // 未登录：读本地
+        try { history = JSON.parse(localStorage.getItem('interviewHistory') || '[]'); } catch(e){}
+      }
+      initPage();
+    }
+
+    function initPage(){
+      if (history.length === 0) {
+        document.querySelector('.max-w-5xl').innerHTML = `
+          <div class="text-center py-20">
+            <div class="text-5xl mb-4">📊</div>
+            <h2 class="text-xl font-bold mb-2">还没有面试记录</h2>
+            <p class="text-gray-400 text-sm mb-6">完成一场模拟面试，这里就会显示你的成长轨迹</p>
+            <button onclick="location.href='配置页.html'" class="gradient-btn text-white font-medium px-8 py-3 rounded-xl">开始第一场面试</button>
+          </div>`;
+      } else {
+        renderStats(); renderTrend(); renderHistory();
+      }
+    }
+
+    loadHistory();
+
+
+    const DIM_NAMES = { jobMatch:'岗位匹配', logic:'逻辑清晰', fluency:'语言流畅', depth:'专业深度', confidence:'自信心', value:'价值表达' };
+
+    if (history.length === 0) {
+      // 没有历史时显示提示
+      document.querySelector('.max-w-5xl').innerHTML = `
+        <div class="text-center py-20">
+          <div class="text-5xl mb-4">📊</div>
+          <h2 class="text-xl font-bold mb-2">还没有面试记录</h2>
+          <p class="text-gray-400 text-sm mb-6">完成一场模拟面试，这里就会显示你的成长轨迹</p>
+          <button onclick="location.href='配置页.html'" class="gradient-btn text-white font-medium px-8 py-3 rounded-xl">开始第一场面试</button>
         </div>`;
-      list.appendChild(el);
-    });
+    } else {
+      renderStats();
+      renderTrend();
+      renderHistory();
+    }
+
+    function renderStats(){
+      const scores = history.map(h=>h.totalScore);
+      const latest = scores[0];
+      const best = Math.max(...scores);
+      const first = scores[scores.length-1];
+      const improve = (latest - first).toFixed(1);
+      const set = (txt, val) => { const el=[...document.querySelectorAll('.text-3xl')].find(e=>e.previousElementSibling && e.previousElementSibling.textContent.includes(txt)); if(el) el.innerHTML=val; };
+
+      document.querySelectorAll('.grid .bg-white').forEach((card)=>{
+        const label = card.querySelector('.text-sm')?.textContent || '';
+        const numEl = card.querySelector('.text-3xl');
+        if(!numEl) return;
+        if(label.includes('累计面试')) numEl.innerHTML = history.length + ' <span class="text-base font-normal text-gray-400">次</span>';
+        else if(label.includes('最新得分')) numEl.textContent = latest;
+        else if(label.includes('最佳得分')) numEl.textContent = best;
+        else if(label.includes('提升')) numEl.textContent = (improve>=0?'+':'') + improve;
+      });
+    }
+
+    function renderTrend(){
+      const recent = [...history].reverse(); // 时间正序
+      new Chart(document.getElementById('trendChart'), {
+        type:'line',
+        data:{ labels: recent.map((h,i)=>`第${i+1}次`),
+          datasets:[{ label:'综合得分', data: recent.map(h=>h.totalScore),
+            borderColor:'#6366F1', backgroundColor:'rgba(99,102,241,0.1)', fill:true, tension:.3, pointRadius:5, pointBackgroundColor:'#6366F1' }]},
+        options:{ scales:{ y:{min:0,max:100,grid:{color:'#F3F4F6'}}, x:{grid:{display:false}} }, plugins:{legend:{display:false}} }
+      });
+
+      // 维度对比(首次vs最新)
+      const first = history[history.length-1].scores;
+      const latest = history[0].scores;
+      const keys = ['jobMatch','logic','fluency','depth','confidence','value'];
+      new Chart(document.getElementById('dimChart'), {
+        type:'bar',
+        data:{ labels: keys.map(k=>DIM_NAMES[k]),
+          datasets:[
+            { label:'首次', data: keys.map(k=>first[k]||0), backgroundColor:'#E5E7EB', borderRadius:6 },
+            { label:'最新', data: keys.map(k=>latest[k]||0), backgroundColor:'#6366F1', borderRadius:6 },
+          ]},
+        options:{ scales:{ y:{min:0,max:100,grid:{color:'#F3F4F6'}}, x:{grid:{display:false}} }, plugins:{legend:{position:'top'}} }
+      });
+    }
+
+        function renderHistory(){
+      const list=document.getElementById('historyList');
+      list.innerHTML='';
+      history.forEach((r, idx)=>{
+        const c = r.totalScore>=80?'#10B981':r.totalScore>=60?'#6366F1':'#F59E0B';
+        const el=document.createElement('div');
+        el.className='flex items-center justify-between p-4 rounded-xl hover:bg-gray-50 transition cursor-pointer';
+                el.style.cursor = 'pointer';
+        el.onclick = () => {
+          if(r.report){
+            localStorage.setItem('viewReport', JSON.stringify({ report:r.report, jobName:r.jobName, levelName:r.levelName, typeList:r.typeList }));
+            window.location.href = '报告页.html?view=1';
+          }
+        };
+
+        // 点击：把这条报告存起来，跳转报告页查看
+        el.addEventListener('click', ()=>{
+          if(r.report){
+            localStorage.setItem('viewHistoryReport', JSON.stringify(r));
+            window.location.href = '报告页.html';
+          } else {
+            alert('这条旧记录没有保存详细报告（升级前的记录），新面试的记录可以查看详情。');
+          }
+        });
+        el.innerHTML=`
+          <div class="flex items-center gap-4">
+            <div class="text-sm text-gray-400 w-32">${r.date}</div>
+            <div class="text-sm font-medium">${r.jobName} · ${r.levelName}</div>
+            <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">${r.typeList}</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-lg font-bold" style="color:${c}">${r.totalScore}</span>
+            <span class="text-gray-300 text-sm">查看报告 →</span>
+          </div>`;
+        list.appendChild(el);
+      });
+    }
   </script>
 </body>
 </html>

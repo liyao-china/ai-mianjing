@@ -4,7 +4,18 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>完善背景信息 - AI面镜</title>
+
+  <!-- ⭐ Tailwind CSS（之前缺了这行，导致样式全失效）-->
   <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- PDF.js -->
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+  <script>
+    if (window.pdfjsLib) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+    }
+  </script>
+
   <script>
     tailwind.config = { theme: { extend: {
       colors: { indigo: { DEFAULT: '#6366F1' }, brandgreen: '#10B981', brandorange: '#F59E0B' },
@@ -17,8 +28,8 @@
     .gradient-btn { background: linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%); transition: all .25s ease; }
     .gradient-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(99,102,241,0.4); }
     .gradient-text { background: linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
-    .upload-zone { border:2px dashed #C7D2FE; transition: all .2s; }
-    .upload-zone:hover, .upload-zone.dragover { border-color:#6366F1; background:#EEF2FF; }
+    .upload-zone { transition: all .2s; }
+    .upload-zone:hover { border-color:#6366F1 !important; background:#EEF2FF; }
   </style>
 </head>
 <body class="font-sans antialiased">
@@ -39,17 +50,33 @@
       <p class="text-gray-500">这些信息将用于生成更贴合你的个性化面试题目</p>
     </div>
 
-    <!-- 简历上传 -->
+    <!-- 简历：PDF上传 + 粘贴 -->
     <div class="bg-white rounded-2xl shadow-soft p-7 mb-6">
-      <h2 class="text-lg font-bold mb-1 flex items-center gap-2">📄 上传简历 <span class="bg-brandgreen/10 text-brandgreen text-xs px-2 py-0.5 rounded-full">强烈推荐</span></h2>
-      <p class="text-sm text-gray-400 mb-4">上传后 AI 会针对你的项目和技术栈出题，效果更佳</p>
-      <label class="upload-zone rounded-2xl p-10 flex flex-col items-center justify-center cursor-pointer block" id="uploadZone">
-        <div class="text-5xl mb-3">📤</div>
-        <p class="font-medium mb-1" id="uploadText">点击或拖拽上传简历</p>
-        <p class="text-xs text-gray-400">支持 PDF / Word，大小不超过 10MB</p>
-        <input type="file" class="hidden" accept=".pdf,.doc,.docx" id="fileInput" />
+      <h2 class="text-lg font-bold mb-1 flex items-center gap-2">📄 上传 / 粘贴简历 <span class="bg-brandgreen/10 text-brandgreen text-xs px-2 py-0.5 rounded-full">强烈推荐</span></h2>
+      <p class="text-sm text-gray-400 mb-4">上传 PDF 简历（AI 自动解析），或直接粘贴简历内容</p>
+
+      <!-- PDF 上传区 -->
+      <label class="upload-zone rounded-2xl p-8 flex flex-col items-center justify-center cursor-pointer mb-4" id="uploadZone" style="border:2px dashed #C7D2FE;">
+        <div class="text-4xl mb-2" id="uploadIcon">📤</div>
+        <p class="font-medium mb-1" id="uploadText">点击或拖拽上传 PDF 简历</p>
+        <p class="text-xs text-gray-400">支持文字版 PDF，上传后自动提取内容</p>
+        <input type="file" class="hidden" accept=".pdf" id="pdfInput" />
       </label>
-      <p class="text-xs text-gray-400 mt-3">🔒 你的简历仅用于生成题目，30 天后自动删除，绝不外传</p>
+
+      <!-- 解析进度 -->
+      <p id="parseStatus" class="text-sm text-center mb-3 hidden"></p>
+
+      <!-- 文本框 -->
+      <textarea id="resumeText" rows="8" placeholder="PDF 解析后的内容会显示在这里，你也可以直接粘贴或编辑简历内容..." class="w-full border-2 border-gray-200 rounded-xl p-4 text-sm focus:border-indigo focus:outline-none resize-none"></textarea>
+      <p class="text-xs text-gray-400 mt-3">🔒 你的简历仅用于生成面试题，存储在你自己的浏览器中</p>
+    </div>
+
+    <!-- 粘贴岗位JD -->
+    <div class="bg-white rounded-2xl shadow-soft p-7 mb-6">
+      <h2 class="text-lg font-bold mb-1 flex items-center gap-2">🎯 粘贴目标岗位 JD <span class="bg-indigo/10 text-indigo text-xs px-2 py-0.5 rounded-full">精准提问</span></h2>
+      <p class="text-sm text-gray-400 mb-4">把目标岗位的招聘要求（JD）粘贴进来，AI 会对照岗位要求和你的简历，问出最有针对性的问题</p>
+      <textarea id="jdText" rows="6" placeholder="例如：&#10;岗位职责：&#10;1. 负责大模型应用产品的设计与落地&#10;2. 主导 RAG、Agent 等技术方案选型&#10;&#10;任职要求：&#10;1. 3年以上AI产品经验&#10;2. 熟悉 LangGraph 多智能体编排&#10;3. 有大模型产品0到1经验..." class="w-full border-2 border-gray-200 rounded-xl p-4 text-sm focus:border-indigo focus:outline-none resize-none"></textarea>
+      <p class="text-xs text-gray-400 mt-3">💡 没有具体 JD 也没关系，可以留空，AI 会按岗位通用要求出题</p>
     </div>
 
     <!-- 背景问卷 -->
@@ -58,40 +85,157 @@
       <div class="space-y-4">
         <div>
           <label class="text-sm text-gray-600 mb-1.5 block">工作年限</label>
-          <select class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-indigo focus:outline-none">
+          <select id="years" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-indigo focus:outline-none">
             <option>在校 / 实习</option><option>应届毕业</option><option>1-3 年</option><option>3-5 年</option><option>5-8 年</option><option>8 年以上</option>
           </select>
         </div>
         <div>
           <label class="text-sm text-gray-600 mb-1.5 block">目标岗位</label>
-          <input type="text" placeholder="如：AI产品经理" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-indigo focus:outline-none" />
+          <input id="targetJob" type="text" placeholder="如：AI产品经理" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-indigo focus:outline-none" />
         </div>
         <div>
           <label class="text-sm text-gray-600 mb-1.5 block">技术栈 / 技能（可多个，逗号分隔）</label>
-          <input type="text" placeholder="如：PyTorch, LangChain, RAG, 云服务" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-indigo focus:outline-none" />
+          <input id="skills" type="text" placeholder="如：PyTorch, LangChain, RAG, 云服务" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-indigo focus:outline-none" />
         </div>
         <div>
           <label class="text-sm text-gray-600 mb-1.5 block">目标公司（选填）</label>
-          <input type="text" placeholder="如：字节跳动 / 创业公司" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-indigo focus:outline-none" />
+          <input id="targetCompany" type="text" placeholder="如：字节跳动 / 创业公司" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-indigo focus:outline-none" />
         </div>
       </div>
     </div>
 
-    <button onclick="location.href='配置页.html'" class="w-full gradient-btn text-white font-medium py-3.5 rounded-xl">保存并开始配置面试 →</button>
+    <button id="saveBtn" class="w-full gradient-btn text-white font-medium py-3.5 rounded-xl">保存并开始配置面试 →</button>
   </div>
 
   <script>
-    const fileInput = document.getElementById('fileInput');
-    const zone = document.getElementById('uploadZone');
-    const txt = document.getElementById('uploadText');
-    fileInput.addEventListener('change', ()=>{
-      if(fileInput.files[0]){ txt.textContent = '✅ 已选择：' + fileInput.files[0].name; }
+    // ===== PDF 上传与解析 =====
+    const pdfInput = document.getElementById('pdfInput');
+    const uploadZone = document.getElementById('uploadZone');
+    const resumeText = document.getElementById('resumeText');
+    const parseStatus = document.getElementById('parseStatus');
+    const uploadText = document.getElementById('uploadText');
+    const uploadIcon = document.getElementById('uploadIcon');
+
+        // ⭐ 填你的 API Key（和面试页同一个）
+    const API_KEY = "sk-ebd50b34fb01401da5d5e02caddfa24e";
+    const MODEL = "qwen3.7-plus";
+    const API_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
+
+    async function parsePDF(file){
+      if(!file) return;
+      if(file.type !== 'application/pdf'){ alert('请上传 PDF 格式文件'); return; }
+
+      parseStatus.classList.remove('hidden');
+      parseStatus.className = 'text-sm text-center mb-3 text-indigo';
+      parseStatus.textContent = '⏳ 正在提取 PDF 文字...';
+      uploadText.textContent = file.name;
+      uploadIcon.textContent = '📄';
+
+      try {
+        // 第1步：提取原始文字
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        let rawText = '';
+        for(let i = 1; i <= pdf.numPages; i++){
+          parseStatus.textContent = `⏳ 正在提取第 ${i}/${pdf.numPages} 页...`;
+          const page = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          rawText += content.items.map(item => item.str).join(' ') + '\n';
+        }
+        rawText = rawText.trim();
+
+        if(!rawText){
+          parseStatus.className = 'text-sm text-center mb-3 text-brandorange';
+          parseStatus.textContent = '⚠️ 没有提取到文字，可能是扫描版PDF。请手动粘贴简历内容。';
+          return;
+        }
+
+        // 先把原始文字放进去（兜底，万一AI整理失败还有原文）
+        resumeText.value = rawText;
+
+        // 第2步：调用 AI 整理（核心Skill）
+        parseStatus.className = 'text-sm text-center mb-3 text-indigo';
+        parseStatus.textContent = '🤖 AI 正在整理简历内容，请稍候...';
+
+        const cleanText = await aiCleanResume(rawText);
+        resumeText.value = cleanText;
+
+        parseStatus.className = 'text-sm text-center mb-3 text-brandgreen';
+        parseStatus.textContent = '✅ AI 已整理好简历，可在下方查看和编辑';
+
+      } catch(err){
+        console.error(err);
+        // 如果AI整理失败，至少保留了原始文字
+        parseStatus.className = 'text-sm text-center mb-3 text-brandorange';
+        parseStatus.textContent = '⚠️ AI整理失败，已显示原始提取内容（可手动编辑）：' + err.message;
+      }
+    }
+
+    // ⭐ AI 简历整理 Skill
+    async function aiCleanResume(rawText){
+      const prompt = `下面是从一份PDF简历中提取出来的文字，由于PDF排版原因，文字顺序可能混乱、缺少段落格式。请你理解其含义，将其整理成一份结构清晰、可读性强的简历，按以下结构组织（没有的部分可省略）：
+
+【个人信息】姓名、求职意向、工作年限等
+【教育背景】学校、专业、时间
+【工作/实习经历】公司、职位、时间、主要工作
+【项目经历】项目名称、你的职责、技术、成果（重点保留量化数据）
+【专业技能】技术栈、工具等
+【其他】证书、奖项等
+
+要求：
+- 忠实于原文信息，不要编造任何内容
+- 保留所有项目细节和量化成果（如"提升40%"）
+- 整理成清晰的分段格式，方便阅读
+- 只输出整理后的简历，不要有"好的""以下是"等多余的话
+
+原始提取文字：
+${rawText}`;
+
+      const response = await fetch(API_URL, {
+        method:'POST',
+        headers:{ 'Authorization':'Bearer '+API_KEY, 'Content-Type':'application/json' },
+        body: JSON.stringify({
+          model: MODEL,
+          enable_thinking: false,
+          messages: [
+            { role:'system', content:'你是一个专业的简历整理助手，擅长把乱序文字整理成结构清晰的简历。' },
+            { role:'user', content: prompt }
+          ]
+        })
+      });
+      const data = await response.json();
+      if(data.error) throw new Error(JSON.stringify(data.error));
+      return data.choices[0].message.content.trim();
+    }
+
+    pdfInput.addEventListener('change', e => parsePDF(e.target.files[0]));
+    uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.style.borderColor = '#6366F1'; uploadZone.style.background = '#EEF2FF'; });
+    uploadZone.addEventListener('dragleave', () => { uploadZone.style.borderColor = '#C7D2FE'; uploadZone.style.background = ''; });
+    uploadZone.addEventListener('drop', e => {
+      e.preventDefault();
+      uploadZone.style.borderColor = '#C7D2FE'; uploadZone.style.background = '';
+      if(e.dataTransfer.files[0]) parsePDF(e.dataTransfer.files[0]);
     });
-    zone.addEventListener('dragover', e=>{ e.preventDefault(); zone.classList.add('dragover'); });
-    zone.addEventListener('dragleave', ()=> zone.classList.remove('dragover'));
-    zone.addEventListener('drop', e=>{
-      e.preventDefault(); zone.classList.remove('dragover');
-      if(e.dataTransfer.files[0]){ fileInput.files = e.dataTransfer.files; txt.textContent = '✅ 已选择：' + e.dataTransfer.files[0].name; }
+
+    // ===== 保存 =====
+    document.getElementById('saveBtn').addEventListener('click', () => {
+      const resumeVal = (document.getElementById('resumeText')?.value || '').trim();
+      const jdText = (document.getElementById('jdText')?.value || '').trim();
+      const years = document.getElementById('years')?.value || '';
+      const targetJob = (document.getElementById('targetJob')?.value || '').trim();
+      const skills = (document.getElementById('skills')?.value || '').trim();
+      const targetCompany = (document.getElementById('targetCompany')?.value || '').trim();
+
+      let info = '';
+      if (resumeVal) info += '【简历内容】\n' + resumeVal + '\n\n';
+      if (years) info += '工作年限：' + years + '\n';
+      if (targetJob) info += '目标岗位：' + targetJob + '\n';
+      if (skills) info += '技术栈/技能：' + skills + '\n';
+      if (targetCompany) info += '目标公司：' + targetCompany + '\n';
+
+      localStorage.setItem('resumeInfo', info);
+      localStorage.setItem('jdInfo', jdText);
+      window.location.href = '配置页.html';
     });
   </script>
 </body>

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>登录 / 注册 - AI面镜</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
     tailwind.config = { theme: { extend: {
       colors: { indigo: { DEFAULT: '#6366F1' }, brandgreen: '#10B981', brandorange: '#F59E0B' },
@@ -16,6 +17,7 @@
     body { background: #F9FAFB; color: #111827; }
     .gradient-btn { background: linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%); transition: all .25s ease; }
     .gradient-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(99,102,241,0.4); }
+    .gradient-btn:disabled { opacity:.6; cursor:not-allowed; }
     .gradient-text { background: linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
     .tab-active { color:#6366F1; border-color:#6366F1; }
     .blob { position:absolute; border-radius:50%; filter:blur(70px); opacity:.4; }
@@ -27,7 +29,6 @@
   <div class="blob w-80 h-80 bg-purple-400 bottom-0 left-0"></div>
 
   <div class="relative z-10 w-full max-w-md px-6">
-    <!-- Logo -->
     <div class="text-center mb-8">
       <a href="index.html" class="inline-flex items-center gap-2">
         <div class="w-11 h-11 rounded-2xl gradient-btn flex items-center justify-center text-white text-xl">🪞</div>
@@ -36,67 +37,95 @@
       <p class="text-gray-400 text-sm mt-2">照见真实的面试表现</p>
     </div>
 
-    <!-- 卡片 -->
     <div class="bg-white rounded-3xl shadow-softlg p-8">
-      <!-- 切换 Tab -->
       <div class="flex border-b border-gray-100 mb-6">
         <button id="tabLogin" class="flex-1 pb-3 text-sm font-medium border-b-2 tab-active" onclick="switchTab('login')">登录</button>
         <button id="tabRegister" class="flex-1 pb-3 text-sm font-medium border-b-2 border-transparent text-gray-400" onclick="switchTab('register')">注册</button>
       </div>
 
-      <!-- 登录方式切换 -->
-      <div class="flex gap-2 mb-5">
-        <button id="mPhone" class="flex-1 py-2 rounded-lg text-sm font-medium bg-indigo/10 text-indigo" onclick="switchMethod('phone')">手机号</button>
-        <button id="mEmail" class="flex-1 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-500" onclick="switchMethod('email')">邮箱</button>
-        <button id="mWechat" class="flex-1 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-500" onclick="switchMethod('wechat')">微信</button>
+      <div class="space-y-3">
+        <input id="email" type="email" placeholder="请输入邮箱" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-indigo focus:outline-none" />
+        <input id="password" type="password" placeholder="请输入密码（至少6位）" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-indigo focus:outline-none" />
       </div>
 
-      <!-- 手机号 / 邮箱表单 -->
-      <div id="formArea">
-        <div id="phoneForm">
-          <input type="tel" placeholder="请输入手机号" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm mb-3 focus:border-indigo focus:outline-none" />
-          <div class="flex gap-2 mb-4">
-            <input type="text" placeholder="验证码" class="flex-1 border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-indigo focus:outline-none" />
-            <button class="px-4 py-3 rounded-xl border-2 border-indigo/20 text-indigo text-sm font-medium whitespace-nowrap hover:bg-indigo/5">获取验证码</button>
-          </div>
-        </div>
-        <div id="emailForm" class="hidden">
-          <input type="email" placeholder="请输入邮箱" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm mb-3 focus:border-indigo focus:outline-none" />
-          <input type="password" placeholder="请输入密码" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm mb-4 focus:border-indigo focus:outline-none" />
-        </div>
-        <div id="wechatForm" class="hidden text-center py-6">
-          <div class="w-40 h-40 mx-auto bg-gray-100 rounded-2xl flex items-center justify-center text-5xl mb-3">📱</div>
-          <p class="text-sm text-gray-500">请使用微信扫码登录</p>
-        </div>
-      </div>
+      <button id="submitBtn" class="w-full gradient-btn text-white font-medium py-3 rounded-xl mb-3 mt-5">登录</button>
 
-      <!-- 登录按钮 -->
-      <button onclick="location.href='个人中心.html'" id="submitBtn" class="w-full gradient-btn text-white font-medium py-3 rounded-xl mb-4">登录</button>
+      <p id="msg" class="text-sm text-center mb-3 hidden"></p>
 
       <p class="text-xs text-gray-400 text-center">登录即代表同意 <a href="#" class="text-indigo">用户协议</a> 和 <a href="#" class="text-indigo">隐私政策</a></p>
     </div>
 
-    <!-- 游客入口 -->
     <p class="text-center text-sm text-gray-400 mt-6">
-      不想登录？<a href="配置页.html" class="text-indigo font-medium hover:underline">先免费体验一次 →</a>
+      不想登录？<a href="简历上传.html" class="text-indigo font-medium hover:underline">先免费体验一次 →</a>
     </p>
   </div>
 
-  <script>
-    function switchTab(tab){
-      const isLogin = tab==='login';
+    <script>
+    /* ============ 填你的 Supabase 信息 ============ */
+    const SUPABASE_URL = "https://skxpfgqylfpavoiurfhr.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNreHBmZ3F5bGZwYXZvaXVyZmhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0NjE5NTYsImV4cCI6MjA5NjAzNzk1Nn0._UcR6vWOppvwcqYaHFqIlKJrADRaRZDOpBDLIdPXncY";
+    /* ============================================ */
+
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let mode = 'register'; // 默认注册
+
+    function switchTab(m){
+      mode = m;
+      const isLogin = m==='login';
       document.getElementById('tabLogin').className = 'flex-1 pb-3 text-sm font-medium border-b-2 ' + (isLogin?'tab-active':'border-transparent text-gray-400');
       document.getElementById('tabRegister').className = 'flex-1 pb-3 text-sm font-medium border-b-2 ' + (!isLogin?'tab-active':'border-transparent text-gray-400');
       document.getElementById('submitBtn').textContent = isLogin ? '登录' : '注册';
+      hideMsg();
     }
-    function switchMethod(m){
-      ['phone','email','wechat'].forEach(x=>{
-        document.getElementById(x+'Form').classList.toggle('hidden', x!==m);
-        const btn = document.getElementById('m'+x.charAt(0).toUpperCase()+x.slice(1));
-        btn.className = 'flex-1 py-2 rounded-lg text-sm font-medium ' + (x===m?'bg-indigo/10 text-indigo':'bg-gray-100 text-gray-500');
-      });
-      document.getElementById('submitBtn').style.display = m==='wechat' ? 'none' : 'block';
+
+    function showMsg(text, isError=true){
+      const el = document.getElementById('msg');
+      el.classList.remove('hidden');
+      el.className = 'text-sm text-center mb-3 ' + (isError?'text-brandorange':'text-brandgreen');
+      el.textContent = text;
     }
+    function hideMsg(){ document.getElementById('msg').classList.add('hidden'); }
+
+    document.getElementById('submitBtn').addEventListener('click', async () => {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value.trim();
+      const btn = document.getElementById('submitBtn');
+
+      if(!email || !password){ showMsg('请输入邮箱和密码'); return; }
+      if(password.length < 6){ showMsg('密码至少6位'); return; }
+
+      btn.disabled = true;
+      btn.textContent = mode==='login' ? '登录中...' : '注册中...';
+
+      try {
+        if(mode === 'register'){
+          const { data, error } = await sb.auth.signUp({ email, password });
+          if(error) throw error;
+          showMsg('✅ 注册成功！请前往邮箱点击验证链接后再登录。', false);
+          setTimeout(()=> switchTab('login'), 1500);
+        } else {
+          const { data, error } = await sb.auth.signInWithPassword({ email, password });
+          if(error) throw error;
+          showMsg('✅ 登录成功，正在跳转...', false);
+          setTimeout(()=> window.location.href = '个人中心.html', 800);
+        }
+      } catch(err){
+        console.error('Supabase错误:', err);
+        let msg = err.message || '操作失败';
+        if(msg.includes('Email not confirmed')) msg = '请先去邮箱点击验证链接';
+        if(msg.includes('Invalid login')) msg = '邮箱或密码错误';
+        if(msg.includes('already registered')) msg = '该邮箱已注册，请直接登录';
+        showMsg(msg);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = mode==='login' ? '登录' : '注册';
+      }
+    });
+
+    // 页面默认显示注册
+    switchTab('register');
   </script>
+
 </body>
 </html>
