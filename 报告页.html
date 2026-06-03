@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>面试报告 - AI面镜</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
     tailwind.config = { theme: { extend: {
       colors: { indigo: { DEFAULT: '#6366F1' }, brandgreen: '#10B981', brandorange: '#F59E0B' },
@@ -94,16 +94,15 @@
   </div>
 
   <script>
-        /* ============ Supabase ============ */
-    const SUPABASE_URL = "你的Project URL";
-    const SUPABASE_KEY = "你的anon public key";
-    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    /* ================================== */
-
-    /* ⭐ 填你的新 API Key */
+    /* ============ Supabase（填你的）============ */
+    const SUPABASE_URL = "https://skxpfgqylfpavoiurfhr.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNreHBmZ3F5bGZwYXZvaXVyZmhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0NjE5NTYsImV4cCI6MjA5NjAzNzk1Nn0._UcR6vWOppvwcqYaHFqIlKJrADRaRZDOpBDLIdPXncY";
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    /* ============ AI（填你重置后的新Key）============ */
     const API_KEY = "sk-ebd50b34fb01401da5d5e02caddfa24e";
     const MODEL = "qwen3.7-plus";
     const API_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
+    /* ================================== */
 
     const DIMENSIONS = [
       { key:'jobMatch', name:'岗位匹配度', weight:30, color:'#10B981' },
@@ -114,23 +113,24 @@
       { key:'value', name:'价值表达', weight:5, color:'#F59E0B' },
     ];
 
-    let jobName='', levelName='', meta={}, qaRecords=[];
+    let jobName='', levelName='', meta={}, qaRecords=[], isViewMode=false;
 
-    // ===== 判断模式：查看历史 or 新评分 =====
+    // ===== 判断模式 =====
     const viewHistoryRaw = localStorage.getItem('viewHistoryReport');
     if (viewHistoryRaw) {
-      // 模式1：查看历史报告（直接显示，不调AI）
-      localStorage.removeItem('viewHistoryReport'); // 用完即删
+      // 查看历史报告
+      isViewMode = true;
+      localStorage.removeItem('viewHistoryReport');
       try {
         const hist = JSON.parse(viewHistoryRaw);
         jobName = hist.jobName; levelName = hist.levelName;
         meta = { typeList: hist.typeList };
-        qaRecords = hist.qaRecords || [];
+        qaRecords = hist.qaRecords || hist.qa_records || [];
         document.getElementById('reportMeta').textContent = `${jobName} · ${levelName} · ${hist.typeList||'综合面试'} · ${hist.date||''}`;
-        renderReport(hist.report);  // 直接渲染已存的报告
+        renderReport(hist.report);
       } catch(e){ showError('历史报告读取失败：'+e.message); }
     } else {
-      // 模式2：新面试后评分
+      // 新面试评分
       try { qaRecords = JSON.parse(localStorage.getItem('qaRecords')) || []; } catch(e){}
       try { meta = JSON.parse(localStorage.getItem('interviewMeta')) || {}; } catch(e){}
       jobName = meta.jobName || 'AI产品经理';
@@ -164,35 +164,37 @@ ${qaText}
         if(data.error) throw new Error(JSON.stringify(data.error));
         let content = data.choices[0].message.content.trim().replace(/```json/g,'').replace(/```/g,'').trim();
         const result = JSON.parse(content);
-        saveToHistory(result);  // 保存完整报告
         renderReport(result);
+        saveToCloud(result);  // 渲染后保存
       } catch(err){ console.error(err); showError('AI评分解析失败：'+err.message); }
     }
 
-          // ===== 保存到云端数据库（如果已登录）=====
-      (async () => {
-        try {
-          const { data: { user } } = await supabaseClient.auth.getUser();
-          if (user) {
-            await supabaseClient.from('interview_records').insert({
-              user_id: user.id,
-              job_name: jobName,
-              level_name: levelName,
-              type_list: meta.typeList || '综合面试',
-              total_score: parseFloat(total),
-              scores: scores,
-              qa_records: qaRecords,
-              report: result
-            });
-            console.log('✅ 已保存到云端');
-          } else {
-            // 未登录：存本地
-            const history = JSON.parse(localStorage.getItem('interviewHistory') || '[]');
-            history.unshift({ date:new Date().toLocaleString('zh-CN'), jobName, levelName, typeList:meta.typeList||'综合面试', totalScore:parseFloat(total), scores, qaRecords, report:result });
-            localStorage.setItem('interviewHistory', JSON.stringify(history.slice(0,20)));
-          }
-        } catch(e){ console.warn('保存失败', e); }
-      })();
+    // ===== 保存到云端/本地 =====
+    async function saveToCloud(result){
+      if(isViewMode) return; // 查看历史时不保存
+      // 重新算总分
+      let total=0; DIMENSIONS.forEach(d=> total+=(result.scores[d.key]||0)*d.weight/100); total=total.toFixed(1);
+      try {
+        const { data: { user } } = await sb.auth.getUser();
+        if (user) {
+          const { error } = await sb.from('interview_records').insert({
+            user_id: user.id,
+            job_name: jobName,
+            level_name: levelName,
+            type_list: meta.typeList || '综合面试',
+            total_score: parseFloat(total),
+            scores: result.scores,
+            qa_records: qaRecords,
+            report: result
+          });
+          if(error) console.warn('云端保存失败:', error); else console.log('✅ 已保存到云端');
+        } else {
+          const history = JSON.parse(localStorage.getItem('interviewHistory') || '[]');
+          history.unshift({ date:new Date().toLocaleString('zh-CN'), jobName, levelName, typeList:meta.typeList||'综合面试', totalScore:parseFloat(total), scores:result.scores, qaRecords, report:result });
+          localStorage.setItem('interviewHistory', JSON.stringify(history.slice(0,20)));
+        }
+      } catch(e){ console.warn('保存异常', e); }
+    }
 
     function renderReport(result){
       const scores = result.scores;
