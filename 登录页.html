@@ -52,7 +52,7 @@
 
       <p id="msg" class="text-sm text-center mb-3 hidden"></p>
 
-      <p class="text-xs text-gray-400 text-center">登录即代表同意 <a href="#" class="text-indigo">用户协议</a> 和 <a href="#" class="text-indigo">隐私政策</a></p>
+      <p class="text-xs text-gray-400 text-center">登录即代表同意 <a href="用户协议.html" class="text-indigo">用户协议</a> 和 <a href="隐私政策.html" class="text-indigo">隐私政策</a></p>
     </div>
 
     <p class="text-center text-sm text-gray-400 mt-6">
@@ -68,7 +68,7 @@
 
     const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    let mode = 'register'; // 默认注册
+    let mode = 'login';
 
     function switchTab(m){
       mode = m;
@@ -123,8 +123,8 @@
       }
     });
 
-    // 页面默认显示注册
-    switchTab('register');
+    // 从登录入口进入时默认展示登录，显式携带 register=1 时展示注册
+    switchTab(new URLSearchParams(location.search).get('register') === '1' ? 'register' : 'login');
   </script>
 
 </body>

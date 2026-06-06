@@ -76,7 +76,7 @@
               <div class="w-7 h-7 rounded-full bg-brandgreen text-white text-xs flex items-center justify-center">✓</div>
               <div>
                 <div class="text-sm font-medium">背景信息</div>
-                <div class="text-xs text-gray-400">已完成</div>
+                <div id="backgroundStatus" class="text-xs text-gray-400">已完成</div>
               </div>
             </div>
             <div class="ml-3.5 h-4 border-l-2 border-gray-100"></div>
@@ -94,7 +94,7 @@
               <div class="w-7 h-7 rounded-full bg-gray-100 text-gray-400 text-xs flex items-center justify-center">3</div>
               <div>
                 <div class="text-sm font-medium text-gray-400">设备检测</div>
-                <div class="text-xs text-gray-400">待开始</div>
+                <div id="deviceStatus" class="text-xs text-gray-400">开始前自动检测</div>
               </div>
             </div>
             <div class="ml-3.5 h-4 border-l-2 border-gray-100"></div>
@@ -285,8 +285,14 @@
     document.querySelector('[data-group="duration"] [data-value="standard"]').classList.add('selected');
     document.querySelector('[data-group="input"] [data-value="voice"]').classList.add('selected');
 
+    document.getElementById('backgroundStatus').textContent =
+      (localStorage.getItem('resumeInfo') || localStorage.getItem('jdInfo')) ? '已完成' : '已跳过';
+
     document.querySelectorAll('.option-card').forEach(card => {
-      card.addEventListener('click', () => {
+      card.setAttribute('role','button');
+      card.setAttribute('tabindex','0');
+      card.setAttribute('aria-pressed',card.classList.contains('selected') ? 'true' : 'false');
+      const selectCard = () => {
         const group = card.closest('[data-group]');
         const groupName = group.dataset.group;
         const mode = group.dataset.mode;
@@ -304,8 +310,11 @@
             selections[groupName] = selections[groupName].filter(v => v !== value);
           }
         }
+        group.querySelectorAll('.option-card').forEach(c=>c.setAttribute('aria-pressed',c.classList.contains('selected')?'true':'false'));
         updateState();
-      });
+      };
+      card.addEventListener('click', selectCard);
+      card.addEventListener('keydown', e=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); selectCard(); } });
     });
 
     const jobNames = { 'ai-pm':'AI产品经理','ai-ops':'AI运营','agent':'Agent开发','algo':'算法工程师','frontend':'前端开发','backend':'后端开发' };
@@ -329,8 +338,30 @@
       }
     }
 
-      document.getElementById('startBtn').addEventListener('click', () => {
+      document.getElementById('startBtn').addEventListener('click', async () => {
       if (!selections.job || !selections.level) return;
+      const btn=document.getElementById('startBtn');
+      const deviceStatus=document.getElementById('deviceStatus');
+      if(selections.input==='voice'){
+        if(!navigator.mediaDevices?.getUserMedia){
+          alert('当前浏览器不支持麦克风检测，请选择文字回答。');
+          return;
+        }
+        btn.disabled=true;
+        deviceStatus.textContent='正在检测麦克风...';
+        try{
+          const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+          stream.getTracks().forEach(t=>t.stop());
+          deviceStatus.textContent='麦克风检测通过';
+        }catch(e){
+          deviceStatus.textContent='麦克风不可用';
+          btn.disabled=false;
+          alert('麦克风不可用或未授权，请授权后重试，或选择文字回答。');
+          return;
+        }
+      } else {
+        deviceStatus.textContent='文字回答无需设备检测';
+      }
       // 把配置存到本地，供面试页读取
       localStorage.setItem('interviewConfig', JSON.stringify(selections));
       // 跳转到面试页

@@ -69,7 +69,7 @@
     <div id="videoSection" class="bg-white rounded-2xl shadow-soft p-6 mb-6 hidden">
       <h2 class="text-lg font-bold mb-4 flex items-center gap-2">🎬 面试录像回放</h2>
       <video id="replayVideo" controls class="w-full rounded-xl bg-black" style="max-height:400px;"></video>
-      <p class="text-xs text-gray-400 mt-2">🔒 仅你本人可见，用于复盘改进</p>
+      <p class="text-xs text-gray-400 mt-2">测试版回放链接可能被持有链接的人访问，请勿分享或录制敏感内容。</p>
     </div>
 
     <div class="bg-white rounded-2xl shadow-soft p-7 mb-6">
@@ -97,7 +97,7 @@
     <div class="text-5xl mb-4">😅</div>
     <h2 class="text-xl font-bold mb-2">评分生成失败</h2>
     <p class="text-gray-400 text-sm mb-6" id="errorMsg">请重试</p>
-    <button onclick="location.reload()" class="gradient-btn text-white font-medium px-8 py-3 rounded-xl">重新生成</button>
+    <button onclick="retryReport()" class="gradient-btn text-white font-medium px-8 py-3 rounded-xl">重新生成</button>
   </div>
 
   <script>
@@ -121,9 +121,28 @@
     ];
 
     let jobName='', levelName='', meta={}, qaRecords=[], isViewMode=false;
+    const isSampleMode = new URLSearchParams(location.search).get('sample') === '1';
+    const SAMPLE_QA = [
+      { question:'请介绍一个你主导的 AI 产品项目，以及你解决的核心问题。', answer:'我主导了客服 RAG 助手，从用户访谈、指标设计到灰度上线，重点解决检索准确率和答案可信度问题。' },
+      { question:'你如何验证产品效果并推动持续优化？', answer:'我同时跟踪离线召回指标与线上采纳率、处理时长，通过失败案例回流持续完善评测集。' }
+    ];
+    const SAMPLE_REPORT = {
+      scores:{jobMatch:86,logic:82,fluency:80,depth:78,confidence:81,value:84},
+      overallComment:'具备较完整的 AI 产品落地思路，下一步需要补充更具体的技术权衡与协作案例。',
+      suggestions:['补充项目规模、个人职责和关键决策依据。','用更具体的失败案例说明复盘与迭代过程。','加强对成本、延迟和准确率之间权衡的表达。'],
+      questions:[
+        {score:84,good:['项目目标和结果表达清楚'],bad:['缺少项目规模和个人贡献占比']},
+        {score:81,good:['能够结合离线与线上指标'],bad:['可进一步说明指标异常时的决策过程']}
+      ]
+    };
 
     const viewHistoryRaw = localStorage.getItem('viewHistoryReport');
-    if (viewHistoryRaw) {
+    if (isSampleMode) {
+      isViewMode = true;
+      jobName='AI产品经理'; levelName='中级'; meta={typeList:'示例报告'}; qaRecords=SAMPLE_QA;
+      document.getElementById('reportMeta').textContent='AI产品经理 · 中级 · 示例报告';
+      renderReport(SAMPLE_REPORT);
+    } else if (viewHistoryRaw) {
       isViewMode = true;
       localStorage.removeItem('viewHistoryReport');
       try {
@@ -153,11 +172,32 @@
         document.getElementById('replayVideo').src = thisVideo;
       }
 
+      const cachedReport = localStorage.getItem('currentInterviewReport');
       if(!qaRecords.length){ showError('没有找到面试记录，请先完成一场面试。'); }
-      else { generateReport(); }
+      else if(cachedReport){
+        try { renderReport(JSON.parse(cachedReport)); }
+        catch(e){ localStorage.removeItem('currentInterviewReport'); generateReport(); }
+      } else { generateReport(); }
     }
 
-    async function generateReport(){
+    function parseReport(content){
+      const cleaned = content.trim().replace(/```json/gi,'').replace(/```/g,'').trim();
+      const start=cleaned.indexOf('{'), end=cleaned.lastIndexOf('}');
+      if(start<0 || end<=start) throw new Error('返回内容不是有效报告');
+      const result=JSON.parse(cleaned.slice(start,end+1));
+      const required=['jobMatch','logic','fluency','depth','confidence','value'];
+      if(!result.scores || required.some(k=>!Number.isFinite(Number(result.scores[k])))) throw new Error('评分维度不完整');
+      result.scores=Object.fromEntries(required.map(k=>[k,Math.max(0,Math.min(100,Number(result.scores[k])))]));
+      result.suggestions=Array.isArray(result.suggestions)?result.suggestions.slice(0,3):[];
+      result.questions=Array.isArray(result.questions)?result.questions.slice(0,qaRecords.length):[];
+      return result;
+    }
+
+    function escapeHtml(value){
+      return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    async function generateReport(attempt=0){
       let qaText='';
       qaRecords.forEach((r,i)=>{ qaText += `问题${i+1}：${r.question}\n候选人回答：${r.answer}\n\n`; });
       const prompt = `你是一位严格、专业的面试评分专家。请根据以下面试问答记录，对候选人（应聘${jobName}，${levelName}级别）进行专业评分。
@@ -179,11 +219,27 @@ ${qaText}
             {role:'user',content:prompt}]})});
         const data = await res.json();
         if(data.error) throw new Error(JSON.stringify(data.error));
-        let content = data.choices[0].message.content.trim().replace(/```json/g,'').replace(/```/g,'').trim();
-        const result = JSON.parse(content);
+        const content = data.choices[0].message.content || '';
+        const result = parseReport(content);
+        localStorage.setItem('currentInterviewReport', JSON.stringify(result));
         renderReport(result);
         saveToCloud(result);
-      } catch(err){ console.error(err); showError('AI评分解析失败：'+err.message); }
+      } catch(err){
+        console.error(err);
+        if(attempt<2){
+          document.getElementById('loadingTip').textContent=`报告格式校验未通过，正在自动重试（${attempt+2}/3）...`;
+          setTimeout(()=>generateReport(attempt+1),700);
+        } else {
+          showError('报告生成暂时失败，请点击重新生成。你的面试记录已保存。');
+        }
+      }
+    }
+
+    function retryReport(){
+      document.getElementById('errorView').classList.add('hidden');
+      document.getElementById('loadingView').classList.remove('hidden');
+      localStorage.removeItem('currentInterviewReport');
+      generateReport();
     }
 
     async function saveToCloud(result){
@@ -220,7 +276,7 @@ ${qaText}
       const scores = result.scores;
       let total=0; DIMENSIONS.forEach(d=> total+=(scores[d.key]||0)*d.weight/100); total=total.toFixed(1);
       let level='待加强';
-      if(total>=90)level='专家水平'; else if(total>=80)level='高级水平'; else if(total>=60)level='中级水平'; else if(total>=40)level='初级水平';
+      if(total>=92)level='专家水平'; else if(total>=80)level='高级水平'; else if(total>=60)level='中级水平'; else if(total>=40)level='初级水平';
       document.getElementById('totalScore').textContent=total;
       document.getElementById('levelTag').textContent=level;
       document.getElementById('overallComment').textContent=result.overallComment||'';
@@ -238,13 +294,13 @@ ${qaText}
 
       const sg=document.getElementById('suggestions'); sg.innerHTML='';
       (result.suggestions||[]).forEach((s,i)=>{ const el=document.createElement('div'); el.className='flex gap-3 bg-white rounded-xl p-4';
-        el.innerHTML=`<div class="w-6 h-6 rounded-full gradient-btn text-white text-xs flex items-center justify-center flex-shrink-0">${i+1}</div><div class="text-sm text-gray-700">${s}</div>`; sg.appendChild(el); });
+        el.innerHTML=`<div class="w-6 h-6 rounded-full gradient-btn text-white text-xs flex items-center justify-center flex-shrink-0">${i+1}</div><div class="flex-1 text-sm text-gray-700">${escapeHtml(s)}</div><button class="text-xs text-indigo hover:underline whitespace-nowrap" onclick="location.href='配置页.html'">专项练习 →</button>`; sg.appendChild(el); });
 
       const qList=document.getElementById('questionList'); qList.innerHTML='';
       (result.questions||[]).forEach((item,idx)=>{ const rec=qaRecords[idx]||{}; const sc=item.score||0;
         const color=sc>=80?'#10B981':sc>=60?'#6366F1':'#F59E0B';
         const card=document.createElement('div'); card.className='bg-white rounded-2xl shadow-soft overflow-hidden';
-        card.innerHTML=`<div class="flex items-center justify-between p-5 cursor-pointer toggle-head"><div class="flex items-center gap-3 flex-1"><span class="text-xs text-gray-400">Q${idx+1}</span><span class="text-sm font-medium text-gray-700">${rec.question||''}</span></div><div class="flex items-center gap-3"><span class="text-lg font-bold" style="color:${color}">${sc}</span><span class="toggle-icon text-gray-400 transition-transform">▼</span></div></div><div class="toggle-body hidden px-5 pb-5 border-t border-gray-50 pt-4"><div class="grid md:grid-cols-2 gap-4 mb-4"><div><div class="text-xs font-semibold text-brandgreen mb-2">✅ 亮点</div><ul class="space-y-1.5">${(item.good||[]).map(g=>`<li class="text-sm text-gray-600 flex gap-1.5"><span class="text-brandgreen">·</span>${g}</li>`).join('')}</ul></div><div><div class="text-xs font-semibold text-brandorange mb-2">⚠️ 改进点</div><ul class="space-y-1.5">${(item.bad||[]).map(b=>`<li class="text-sm text-gray-600 flex gap-1.5"><span class="text-brandorange">·</span>${b}</li>`).join('')}</ul></div></div><div><div class="text-xs font-semibold text-gray-500 mb-2">📝 你的回答</div><div class="bg-gray-50 rounded-xl p-4 text-sm text-gray-600 leading-relaxed">${rec.answer||''}</div></div></div>`;
+        card.innerHTML=`<div class="flex items-center justify-between p-5 cursor-pointer toggle-head"><div class="flex items-center gap-3 flex-1"><span class="text-xs text-gray-400">Q${idx+1}</span><span class="text-sm font-medium text-gray-700">${escapeHtml(rec.question||'')}</span></div><div class="flex items-center gap-3"><span class="text-lg font-bold" style="color:${color}">${sc}</span><span class="toggle-icon text-gray-400 transition-transform">▼</span></div></div><div class="toggle-body hidden px-5 pb-5 border-t border-gray-50 pt-4"><div class="grid md:grid-cols-2 gap-4 mb-4"><div><div class="text-xs font-semibold text-brandgreen mb-2">✅ 亮点</div><ul class="space-y-1.5">${(item.good||[]).map(g=>`<li class="text-sm text-gray-600 flex gap-1.5"><span class="text-brandgreen">·</span>${escapeHtml(g)}</li>`).join('')}</ul></div><div><div class="text-xs font-semibold text-brandorange mb-2">⚠️ 改进点</div><ul class="space-y-1.5">${(item.bad||[]).map(b=>`<li class="text-sm text-gray-600 flex gap-1.5"><span class="text-brandorange">·</span>${escapeHtml(b)}</li>`).join('')}</ul></div></div><div><div class="text-xs font-semibold text-gray-500 mb-2">📝 你的回答</div><div class="bg-gray-50 rounded-xl p-4 text-sm text-gray-600 leading-relaxed">${escapeHtml(rec.answer||'')}</div></div></div>`;
         qList.appendChild(card);
         const head=card.querySelector('.toggle-head'),body=card.querySelector('.toggle-body'),icon=card.querySelector('.toggle-icon');
         head.addEventListener('click',()=>{ body.classList.toggle('hidden'); icon.style.transform=body.classList.contains('hidden')?'rotate(0)':'rotate(180deg)'; });

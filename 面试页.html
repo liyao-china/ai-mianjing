@@ -93,7 +93,7 @@
       <div class="text-4xl mb-3">📹</div>
       <h3 class="text-xl font-bold mb-2">视频录制授权</h3>
       <p class="text-gray-500 text-sm mb-2">为了帮助你<b>赛后复盘</b>，本次面试可全程录制视频（含画面和声音）。</p>
-      <p class="text-gray-400 text-xs mb-6">🔒 视频仅你本人可在"历史记录"中查看，安全私密。你也可以选择不录制。</p>
+      <p class="text-gray-400 text-xs mb-6">测试版录制会上传云端用于历史回放，请勿录制敏感内容。你也可以选择不录制。</p>
       <div class="flex gap-3">
         <button id="noRecordBtn" class="flex-1 py-2.5 rounded-xl border-2 border-gray-200 text-sm font-medium hover:border-gray-300 transition">不录制</button>
         <button id="agreeRecordBtn" class="flex-1 py-2.5 rounded-xl gradient-btn text-white text-sm font-medium">同意录制</button>
@@ -148,6 +148,7 @@
       inputMode: cfg.input || 'voice',
       questionCount:0, messages:[], qaRecords:[], lastQuestion:'',
       waitingAnswer:false, isRecording:false, totalSeconds:dur.sec, timerId:null,
+      aiThinking:false,
       mediaStream:null, recognition:null, transcript:'',
       videoStream:null, videoRecorder:null, videoChunks:[], recordVideo:false
     };
@@ -175,6 +176,7 @@ ${jdInfo ? '重点对照JD要求考察。' : ''}
 - 继续提问：[STATUS:CONTINUE]
 - 已较全面评估，进入反问环节：先说"我的问题差不多了，你有什么想问我的吗？"再输出 [STATUS:REVERSE]
 - 反问结束：说几句结束语再输出 [STATUS:END]
+本次面试最多提问${TOTAL_QUESTIONS}道题。不要超过题目上限。
 现在请开始面试，说出第一个问题（记得加状态标记）。`;
 
     state.messages.push({ role:'system', content: systemPrompt });
@@ -184,19 +186,22 @@ ${jdInfo ? '重点对照JD要求考察。' : ''}
     for(let i=0;i<TOTAL_QUESTIONS;i++){ const d=document.createElement('div'); d.className='flex-1 h-1.5 rounded-full bg-gray-200 transition-all'; dotsBox.appendChild(d); }
     function updateDots(){
       [...dotsBox.children].forEach((d,i)=> d.className='flex-1 h-1.5 rounded-full transition-all '+(i<state.questionCount?'bg-brandgreen':i===state.questionCount?'bg-indigo':'bg-gray-200'));
-      document.getElementById('qNow').textContent = state.questionCount;
+      document.getElementById('qNow').textContent = Math.min(state.questionCount, TOTAL_QUESTIONS);
     }
 
     // 气泡
+    function escapeHtml(value){
+      return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
     const chatArea = document.getElementById('chatArea');
     function addAIBubble(text){
       const div=document.createElement('div'); div.className='flex gap-3 fade-up';
-      div.innerHTML=`<div class="w-9 h-9 rounded-full bg-indigo/10 flex items-center justify-center text-base flex-shrink-0">🤖</div><div class="max-w-[80%]"><div class="bg-indigo/5 rounded-2xl rounded-tl-sm px-5 py-3.5 text-sm text-gray-700 leading-relaxed">${text}</div></div>`;
+      div.innerHTML=`<div class="w-9 h-9 rounded-full bg-indigo/10 flex items-center justify-center text-base flex-shrink-0">🤖</div><div class="max-w-[80%]"><div class="bg-indigo/5 rounded-2xl rounded-tl-sm px-5 py-3.5 text-sm text-gray-700 leading-relaxed">${escapeHtml(text)}</div></div>`;
       chatArea.appendChild(div); scrollBottom();
     }
     function addUserBubble(text){
       const div=document.createElement('div'); div.className='flex gap-3 justify-end fade-up';
-      div.innerHTML=`<div class="max-w-[80%]"><div class="bg-white border border-gray-200 rounded-2xl rounded-tr-sm px-5 py-3.5 text-sm text-gray-700 leading-relaxed">${text}</div></div><div class="w-9 h-9 rounded-full bg-indigo flex items-center justify-center text-white text-sm flex-shrink-0">我</div>`;
+      div.innerHTML=`<div class="max-w-[80%]"><div class="bg-white border border-gray-200 rounded-2xl rounded-tr-sm px-5 py-3.5 text-sm text-gray-700 leading-relaxed">${escapeHtml(text)}</div></div><div class="w-9 h-9 rounded-full bg-indigo flex items-center justify-center text-white text-sm flex-shrink-0">我</div>`;
       chatArea.appendChild(div); scrollBottom();
     }
     function addThinking(){
@@ -227,6 +232,9 @@ ${jdInfo ? '重点对照JD要求考察。' : ''}
 
     let interviewPhase = 'interviewing';
     async function askNextQuestion(){
+      if(state.qaRecords.length >= TOTAL_QUESTIONS){ finishInterview(); return; }
+      state.aiThinking=true;
+      document.getElementById('progressTip').textContent='AI 思考中，通常需要 5-15 秒';
       setInputEnabled(false); addThinking();
       try{
         let reply = await callAI(state.messages);
@@ -234,12 +242,18 @@ ${jdInfo ? '重点对照JD要求考察。' : ''}
         const question = reply.replace(/\[STATUS:\w+\]/g,'').trim();
         removeThinking(); addAIBubble(question); speak(question); // 语音播报
         state.lastQuestion=question; state.messages.push({role:'assistant',content:reply});
-        if(status==='END'){ state.waitingAnswer=false; setInputEnabled(false); document.getElementById('progressTip').textContent='面试结束'; setTimeout(()=>finishInterview(),2500); return; }
+        state.aiThinking=false;
+        if(status==='END'){ state.waitingAnswer=false; setInputEnabled(false); document.getElementById('progressTip').textContent='面试结束'; setTimeout(()=>finishInterview(),1200); return; }
         if(status==='REVERSE'){ interviewPhase='reversing'; document.getElementById('progressTip').textContent='反问环节'; }
         else { state.questionCount++; updateDots(); document.getElementById('progressTip').textContent='请回答'; }
         state.waitingAnswer=true; setInputEnabled(true);
         if(state.inputMode==='voice') document.getElementById('recordHint').textContent='点击麦克风开始回答';
-      }catch(err){ removeThinking(); addAIBubble('⚠️ AI出题失败：'+err.message); }
+      }catch(err){
+        state.aiThinking=false;
+        removeThinking();
+        addAIBubble('出题暂时失败，请稍后重试或结束本次面试。');
+        document.getElementById('progressTip').textContent='出题失败';
+      }
     }
 
     async function submitAnswer(answerText){
@@ -250,7 +264,13 @@ ${jdInfo ? '重点对照JD要求考察。' : ''}
       state.waitingAnswer=false;
       document.getElementById('nextBtn').classList.add('hidden');
       document.getElementById('textInput').value=''; document.getElementById('liveTranscript').textContent='';
-      askNextQuestion();
+      if(state.qaRecords.length >= TOTAL_QUESTIONS){
+        document.getElementById('progressTip').textContent='已完成全部题目';
+        setInputEnabled(false);
+        setTimeout(()=>finishInterview(),500);
+      } else {
+        askNextQuestion();
+      }
     }
 
     function setInputEnabled(enabled){
@@ -321,7 +341,7 @@ ${jdInfo ? '重点对照JD要求考察。' : ''}
     function fmt(s){ const m=Math.floor(s/60),ss=s%60; return `${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`; }
     function startTimer(){
       document.getElementById('timer').textContent=fmt(state.totalSeconds);
-      state.timerId=setInterval(()=>{ state.totalSeconds--; const t=document.getElementById('timer'); t.textContent=fmt(state.totalSeconds);
+      state.timerId=setInterval(()=>{ if(!state.waitingAnswer || state.aiThinking) return; state.totalSeconds--; const t=document.getElementById('timer'); t.textContent=fmt(state.totalSeconds);
         if(state.totalSeconds<=60) t.classList.add('text-brandorange'); if(state.totalSeconds<=0){ clearInterval(state.timerId); finishInterview(); } },1000);
     }
 
@@ -339,6 +359,7 @@ ${jdInfo ? '重点对照JD要求考察。' : ''}
       // 保存问答记录
       localStorage.setItem('qaRecords', JSON.stringify(state.qaRecords));
       localStorage.setItem('interviewMeta', JSON.stringify({ jobName, levelName, typeList }));
+      localStorage.removeItem('currentInterviewReport');
 
       const m=document.getElementById('endModal'); m.classList.remove('hidden'); m.classList.add('flex');
 

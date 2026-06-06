@@ -68,7 +68,7 @@
 
       <!-- 文本框 -->
       <textarea id="resumeText" rows="8" placeholder="PDF 解析后的内容会显示在这里，你也可以直接粘贴或编辑简历内容..." class="w-full border-2 border-gray-200 rounded-xl p-4 text-sm focus:border-indigo focus:outline-none resize-none"></textarea>
-      <p class="text-xs text-gray-400 mt-3">🔒 你的简历仅用于生成面试题，存储在你自己的浏览器中</p>
+      <p class="text-xs text-gray-400 mt-3">🔒 内容保存在当前浏览器；开始面试后会发送至 AI 服务用于生成题目和评分。请勿填写不必要的敏感信息。</p>
     </div>
 
     <!-- 粘贴岗位JD -->
@@ -105,6 +105,7 @@
     </div>
 
     <button id="saveBtn" class="w-full gradient-btn text-white font-medium py-3.5 rounded-xl">保存并开始配置面试 →</button>
+    <p id="saveHint" class="text-center text-xs text-gray-400 mt-3">至少填写一项信息；也可以使用右上角“跳过”。</p>
   </div>
 
   <script>
@@ -225,6 +226,11 @@ ${rawText}`;
       const targetJob = (document.getElementById('targetJob')?.value || '').trim();
       const skills = (document.getElementById('skills')?.value || '').trim();
       const targetCompany = (document.getElementById('targetCompany')?.value || '').trim();
+      if(!resumeVal && !jdText && !targetJob && !skills && !targetCompany){
+        document.getElementById('saveHint').textContent='请至少填写一项背景信息，或点击右上角“跳过”。';
+        document.getElementById('saveHint').className='text-center text-xs text-brandorange mt-3';
+        return;
+      }
 
       let info = '';
       if (resumeVal) info += '【简历内容】\n' + resumeVal + '\n\n';

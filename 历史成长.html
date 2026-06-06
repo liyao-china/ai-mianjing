@@ -130,21 +130,6 @@
 
     const DIM_NAMES = { jobMatch:'岗位匹配', logic:'逻辑清晰', fluency:'语言流畅', depth:'专业深度', confidence:'自信心', value:'价值表达' };
 
-    if (history.length === 0) {
-      // 没有历史时显示提示
-      document.querySelector('.max-w-5xl').innerHTML = `
-        <div class="text-center py-20">
-          <div class="text-5xl mb-4">📊</div>
-          <h2 class="text-xl font-bold mb-2">还没有面试记录</h2>
-          <p class="text-gray-400 text-sm mb-6">完成一场模拟面试，这里就会显示你的成长轨迹</p>
-          <button onclick="location.href='配置页.html'" class="gradient-btn text-white font-medium px-8 py-3 rounded-xl">开始第一场面试</button>
-        </div>`;
-    } else {
-      renderStats();
-      renderTrend();
-      renderHistory();
-    }
-
     function renderStats(){
       const scores = history.map(h=>h.totalScore);
       const latest = scores[0];
@@ -196,14 +181,6 @@
         const c = r.totalScore>=80?'#10B981':r.totalScore>=60?'#6366F1':'#F59E0B';
         const el=document.createElement('div');
         el.className='flex items-center justify-between p-4 rounded-xl hover:bg-gray-50 transition cursor-pointer';
-                el.style.cursor = 'pointer';
-        el.onclick = () => {
-          if(r.report){
-            localStorage.setItem('viewReport', JSON.stringify({ report:r.report, jobName:r.jobName, levelName:r.levelName, typeList:r.typeList }));
-            window.location.href = '报告页.html?view=1';
-          }
-        };
-
         // 点击：把这条报告存起来，跳转报告页查看
         el.addEventListener('click', ()=>{
           if(r.report){
