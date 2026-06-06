@@ -65,6 +65,13 @@
       </div>
     </div>
 
+    <!-- 面试回放视频 -->
+    <div id="videoSection" class="bg-white rounded-2xl shadow-soft p-6 mb-6 hidden">
+      <h2 class="text-lg font-bold mb-4 flex items-center gap-2">🎬 面试录像回放</h2>
+      <video id="replayVideo" controls class="w-full rounded-xl bg-black" style="max-height:400px;"></video>
+      <p class="text-xs text-gray-400 mt-2">🔒 仅你本人可见，用于复盘改进</p>
+    </div>
+
     <div class="bg-white rounded-2xl shadow-soft p-7 mb-6">
       <h2 class="text-lg font-bold mb-5">各维度得分</h2>
       <div class="grid md:grid-cols-2 gap-x-10 gap-y-4" id="dimBars"></div>
@@ -94,11 +101,11 @@
   </div>
 
   <script>
-    /* ============ Supabase（填你的）============ */
+    /* ============ Supabase ============ */
     const SUPABASE_URL = "https://skxpfgqylfpavoiurfhr.supabase.co";
     const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNreHBmZ3F5bGZwYXZvaXVyZmhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0NjE5NTYsImV4cCI6MjA5NjAzNzk1Nn0._UcR6vWOppvwcqYaHFqIlKJrADRaRZDOpBDLIdPXncY";
     const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    /* ============ AI（填你重置后的新Key）============ */
+    /* ============ AI（填你的Key）============ */
     const API_KEY = "sk-ebd50b34fb01401da5d5e02caddfa24e";
     const MODEL = "qwen3.7-plus";
     const API_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
@@ -115,10 +122,8 @@
 
     let jobName='', levelName='', meta={}, qaRecords=[], isViewMode=false;
 
-    // ===== 判断模式 =====
     const viewHistoryRaw = localStorage.getItem('viewHistoryReport');
     if (viewHistoryRaw) {
-      // 查看历史报告
       isViewMode = true;
       localStorage.removeItem('viewHistoryReport');
       try {
@@ -128,14 +133,26 @@
         qaRecords = hist.qaRecords || hist.qa_records || [];
         document.getElementById('reportMeta').textContent = `${jobName} · ${levelName} · ${hist.typeList||'综合面试'} · ${hist.date||''}`;
         renderReport(hist.report);
+        // 历史回放视频
+        if(hist.video_url){
+          document.getElementById('videoSection').classList.remove('hidden');
+          document.getElementById('replayVideo').src = hist.video_url;
+        }
       } catch(e){ showError('历史报告读取失败：'+e.message); }
     } else {
-      // 新面试评分
       try { qaRecords = JSON.parse(localStorage.getItem('qaRecords')) || []; } catch(e){}
       try { meta = JSON.parse(localStorage.getItem('interviewMeta')) || {}; } catch(e){}
       jobName = meta.jobName || 'AI产品经理';
       levelName = meta.levelName || '中级';
       document.getElementById('reportMeta').textContent = `${jobName} · ${levelName} · ${meta.typeList||'综合面试'}`;
+
+      // 本次录制的视频
+      const thisVideo = localStorage.getItem('videoUrl');
+      if(thisVideo){
+        document.getElementById('videoSection').classList.remove('hidden');
+        document.getElementById('replayVideo').src = thisVideo;
+      }
+
       if(!qaRecords.length){ showError('没有找到面试记录，请先完成一场面试。'); }
       else { generateReport(); }
     }
@@ -165,18 +182,17 @@ ${qaText}
         let content = data.choices[0].message.content.trim().replace(/```json/g,'').replace(/```/g,'').trim();
         const result = JSON.parse(content);
         renderReport(result);
-        saveToCloud(result);  // 渲染后保存
+        saveToCloud(result);
       } catch(err){ console.error(err); showError('AI评分解析失败：'+err.message); }
     }
 
-    // ===== 保存到云端/本地 =====
     async function saveToCloud(result){
-      if(isViewMode) return; // 查看历史时不保存
-      // 重新算总分
+      if(isViewMode) return;
       let total=0; DIMENSIONS.forEach(d=> total+=(result.scores[d.key]||0)*d.weight/100); total=total.toFixed(1);
       try {
         const { data: { user } } = await sb.auth.getUser();
         if (user) {
+          const videoUrl = localStorage.getItem('videoUrl') || null;
           const { error } = await sb.from('interview_records').insert({
             user_id: user.id,
             job_name: jobName,
@@ -185,13 +201,17 @@ ${qaText}
             total_score: parseFloat(total),
             scores: result.scores,
             qa_records: qaRecords,
-            report: result
+            report: result,
+            video_url: videoUrl
           });
           if(error) console.warn('云端保存失败:', error); else console.log('✅ 已保存到云端');
+          localStorage.removeItem('videoUrl');
         } else {
+          const videoUrl = localStorage.getItem('videoUrl') || null;
           const history = JSON.parse(localStorage.getItem('interviewHistory') || '[]');
-          history.unshift({ date:new Date().toLocaleString('zh-CN'), jobName, levelName, typeList:meta.typeList||'综合面试', totalScore:parseFloat(total), scores:result.scores, qaRecords, report:result });
+          history.unshift({ date:new Date().toLocaleString('zh-CN'), jobName, levelName, typeList:meta.typeList||'综合面试', totalScore:parseFloat(total), scores:result.scores, qaRecords, report:result, video_url:videoUrl });
           localStorage.setItem('interviewHistory', JSON.stringify(history.slice(0,20)));
+          localStorage.removeItem('videoUrl');
         }
       } catch(e){ console.warn('保存异常', e); }
     }

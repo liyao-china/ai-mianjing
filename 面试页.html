@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>模拟面试中 - AI面镜</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
     tailwind.config = { theme: { extend: {
       colors: { indigo: { DEFAULT: '#6366F1' }, brandgreen: '#10B981', brandorange: '#F59E0B' },
@@ -27,6 +28,8 @@
     .typing::after { content:'.'; animation: dots 1.2s infinite; }
     .chat-scroll::-webkit-scrollbar { width:6px; }
     .chat-scroll::-webkit-scrollbar-thumb { background:#E5E7EB; border-radius:3px; }
+    @keyframes recDot { 0%,100%{opacity:1} 50%{opacity:.3} }
+    .rec-dot { animation: recDot 1.2s infinite; }
   </style>
 </head>
 <body class="font-sans antialiased h-screen flex flex-col overflow-hidden">
@@ -37,6 +40,7 @@
       <div class="flex items-center gap-3">
         <div class="w-8 h-8 rounded-lg gradient-btn flex items-center justify-center text-white text-sm">🪞</div>
         <span id="configLabel" class="text-sm font-medium text-gray-600">AI面试中</span>
+        <span id="recBadge" class="hidden items-center gap-1 text-xs text-red-500"><span class="w-2 h-2 rounded-full bg-red-500 rec-dot"></span>录制中</span>
       </div>
       <div class="flex items-center gap-4">
         <div class="flex items-center gap-1.5 text-sm"><span>⏱️</span><span id="timer" class="font-semibold tabular-nums">20:00</span></div>
@@ -57,10 +61,12 @@
     <div class="max-w-4xl mx-auto px-6 py-8 space-y-5" id="chatArea"></div>
   </main>
 
+  <!-- 用户视频小窗（录制时显示）-->
+  <video id="selfVideo" autoplay muted playsinline class="hidden fixed bottom-28 right-6 w-40 h-30 rounded-xl shadow-softlg object-cover z-30 border-2 border-white" style="width:160px;height:120px;"></video>
+
   <!-- 底部交互区 -->
   <footer class="bg-white border-t border-gray-100 flex-shrink-0">
     <div class="max-w-4xl mx-auto px-6 py-5">
-      <!-- 语音模式 -->
       <div id="voiceMode" class="flex flex-col items-center">
         <div class="relative mb-3">
           <div class="absolute inset-0 rounded-full bg-indigo/30 pulse-ring hidden" id="ring1"></div>
@@ -71,7 +77,6 @@
         <p id="recordHint" class="text-sm text-gray-500 mb-1">点击麦克风开始回答</p>
         <p id="liveTranscript" class="text-sm text-indigo max-w-xl text-center min-h-[20px]"></p>
       </div>
-      <!-- 文字模式 -->
       <div id="textMode" class="hidden">
         <textarea id="textInput" rows="3" placeholder="在这里输入你的回答..." class="w-full border-2 border-gray-200 rounded-xl p-4 text-sm focus:border-indigo focus:outline-none resize-none"></textarea>
       </div>
@@ -82,17 +87,18 @@
     </div>
   </footer>
 
-  <!-- 麦克风弹窗 -->
-  <div id="micModal" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-    <div class="bg-white rounded-2xl p-7 max-w-sm mx-4 text-center">
-      <div class="text-4xl mb-3">🎙️</div>
-      <h3 class="text-xl font-bold mb-2">准备开始面试</h3>
-      <p class="text-gray-500 text-sm mb-6">选择回答方式。语音模式需要麦克风权限（请用 Chrome 浏览器）。</p>
+  <!-- 视频录制授权弹窗 -->
+  <div id="videoModal" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+    <div class="bg-white rounded-2xl p-7 max-w-md mx-4 text-center">
+      <div class="text-4xl mb-3">📹</div>
+      <h3 class="text-xl font-bold mb-2">视频录制授权</h3>
+      <p class="text-gray-500 text-sm mb-2">为了帮助你<b>赛后复盘</b>，本次面试可全程录制视频（含画面和声音）。</p>
+      <p class="text-gray-400 text-xs mb-6">🔒 视频仅你本人可在"历史记录"中查看，安全私密。你也可以选择不录制。</p>
       <div class="flex gap-3">
-        <button id="useTextBtn" class="flex-1 py-2.5 rounded-xl border-2 border-gray-200 text-sm font-medium hover:border-gray-300 transition">⌨️ 文字答题</button>
-        <button id="useVoiceBtn" class="flex-1 py-2.5 rounded-xl gradient-btn text-white text-sm font-medium">🎙️ 语音答题</button>
+        <button id="noRecordBtn" class="flex-1 py-2.5 rounded-xl border-2 border-gray-200 text-sm font-medium hover:border-gray-300 transition">不录制</button>
+        <button id="agreeRecordBtn" class="flex-1 py-2.5 rounded-xl gradient-btn text-white text-sm font-medium">同意录制</button>
       </div>
-      <p id="micError" class="text-xs text-brandorange mt-3 hidden"></p>
+      <p id="videoError" class="text-xs text-brandorange mt-3 hidden"></p>
     </div>
   </div>
 
@@ -101,7 +107,7 @@
     <div class="bg-white rounded-2xl p-7 max-w-sm mx-4 text-center">
       <div class="text-4xl mb-3">🎉</div>
       <h3 class="text-xl font-bold mb-2">面试完成！</h3>
-      <p class="text-gray-500 text-sm mb-6">AI 正在分析你的表现，即将生成评分报告...</p>
+      <p class="text-gray-500 text-sm mb-6" id="endMsg">AI 正在分析你的表现，即将生成评分报告...</p>
       <div class="flex gap-3">
         <button id="cancelEnd" class="flex-1 py-2.5 rounded-xl border-2 border-gray-200 text-sm font-medium hover:border-gray-300 transition">继续面试</button>
         <button id="goReport" class="flex-1 py-2.5 rounded-xl gradient-btn text-white text-sm font-medium">查看报告 →</button>
@@ -110,27 +116,24 @@
   </div>
 
   <script>
-    /* ============================================================
-       ⭐ 在这里填你的 API Key（用英文引号）
-    ============================================================ */
+    /* ============ 填你的 Key ============ */
     const API_KEY = "sk-ebd50b34fb01401da5d5e02caddfa24e";
     const MODEL = "qwen3.7-plus";
     const API_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
-    /* ============================================================ */
+    const SUPABASE_URL = "https://skxpfgqylfpavoiurfhr.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNreHBmZ3F5bGZwYXZvaXVyZmhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0NjE5NTYsImV4cCI6MjA5NjAzNzk1Nn0._UcR6vWOppvwcqYaHFqIlKJrADRaRZDOpBDLIdPXncY";
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const VIDEO_BUCKET = "interview-videos";
+    /* ================================== */
 
-    // ---------- 读取用户配置 ----------
     const jobNames = { 'ai-pm':'AI产品经理','ai-ops':'AI运营','agent':'Agent开发工程师','algo':'算法工程师','frontend':'前端开发','backend':'后端开发' };
     const levelNames = { intern:'实习', campus:'校招', junior:'初级', mid:'中级', senior:'高级', expert:'专家' };
     const typeNames = { behavior:'行为面试', tech:'技术面试', project:'项目深度面', pressure:'压力面试', case:'案例设计面' };
     const durMap = { quick:{sec:600,total:4}, standard:{sec:1200,total:6}, deep:{sec:2400,total:8} };
 
-    let cfg = {};
-    try { cfg = JSON.parse(localStorage.getItem('interviewConfig')) || {}; } catch(e){}
-    let resumeInfo = '';
-    try { resumeInfo = localStorage.getItem('resumeInfo') || ''; } catch(e){}
-    let jdInfo = '';
-    try { jdInfo = localStorage.getItem('jdInfo') || ''; } catch(e){}
-
+    let cfg={}; try { cfg = JSON.parse(localStorage.getItem('interviewConfig')) || {}; } catch(e){}
+    let resumeInfo=''; try { resumeInfo = localStorage.getItem('resumeInfo') || ''; } catch(e){}
+    let jdInfo=''; try { jdInfo = localStorage.getItem('jdInfo') || ''; } catch(e){}
 
     const jobName = jobNames[cfg.job] || 'AI产品经理';
     const levelName = levelNames[cfg.level] || '中级';
@@ -141,88 +144,42 @@
     document.getElementById('configLabel').textContent = `${jobName} · ${levelName} · ${typeList}`;
     document.getElementById('qTotal').textContent = TOTAL_QUESTIONS;
 
-    // ---------- 状态 ----------
     let state = {
       inputMode: cfg.input || 'voice',
-      questionCount: 0,           // 已问的主问题数
-      messages: [],               // 完整对话历史(发给AI)
-      qaRecords: [],              // 问答记录(用于评分)
-      lastQuestion: '',           // 最近的问题
-      waitingAnswer: false,
-      isRecording: false,
-      totalSeconds: dur.sec,
-      timerId: null,
-      mediaStream: null, mediaRecorder: null, recognition: null, transcript: ''
+      questionCount:0, messages:[], qaRecords:[], lastQuestion:'',
+      waitingAnswer:false, isRecording:false, totalSeconds:dur.sec, timerId:null,
+      mediaStream:null, recognition:null, transcript:'',
+      videoStream:null, videoRecorder:null, videoChunks:[], recordVideo:false
     };
 
-    // ---------- 系统提示词(面试官人设) ----------
-            // ===== 不同岗位的人才画像模型 =====
+    /* ===== 人才模型 + systemPrompt ===== */
     const talentModels = {
-      'ai-pm': `① 技术理解力（对AI技术边界、能力与局限的认知）
-② 产品落地力（将不确定的AI能力转化为确定产品体验的能力）
-③ 业务洞察力（对业务场景、用户需求、商业价值的理解）
-④ 数据驱动力（用指标评估和迭代优化产品的能力）
-⑤ 协作推动力（跨团队沟通、推动方案落地的能力）`,
-      'agent': `① 框架掌握度（LangChain/LangGraph等Agent框架的理解与实践）
-② 架构设计力（多智能体编排、工具调用、记忆管理的设计能力）
-③ 工程实现力（代码质量、系统稳定性、性能优化）
-④ 问题解决力（调试、定位、解决复杂Agent问题的能力）
-⑤ 技术视野（对Agent前沿发展、技术选型的判断）`,
-      'algo': `① 算法基础（数学、模型原理的扎实程度）
-② 工程落地（模型训练、部署、优化的实战能力）
-③ 业务结合（用算法解决实际业务问题的能力）
-④ 项目深度（项目难度、个人贡献、效果指标）
-⑤ 技术前沿（对领域最新进展的了解与思考）`,
-      'default': `① 基础知识（原理、概念的扎实程度）
-② 工程能力（编码、系统设计、实战经验）
-③ 问题解决（分析和解决复杂问题的思路）
-④ 项目深度（项目难度、个人贡献、量化成果）
-⑤ 学习成长（技术视野、持续学习能力）`
+      'ai-pm': `① 技术理解力 ② 产品落地力 ③ 业务洞察力 ④ 数据驱动力 ⑤ 协作推动力`,
+      'agent': `① 框架掌握度 ② 架构设计力 ③ 工程实现力 ④ 问题解决力 ⑤ 技术视野`,
+      'algo': `① 算法基础 ② 工程落地 ③ 业务结合 ④ 项目深度 ⑤ 技术前沿`,
+      'default': `① 基础知识 ② 工程能力 ③ 问题解决 ④ 项目深度 ⑤ 学习成长`
     };
     const talentModel = talentModels[cfg.job] || talentModels['default'];
 
     const systemPrompt = `你是一位经验丰富、洞察敏锐的资深面试官，正在面试应聘【${jobName}】（${levelName}级别）的候选人。本次面试类型：${typeList}。
 ${resumeInfo ? '【候选人简历/背景】\n' + resumeInfo + '\n' : ''}
 ${jdInfo ? '【目标岗位JD】\n' + jdInfo + '\n' : ''}
-
 【人才画像评估模型（你心中的考察框架）】
-你需要在面试过程中，系统性地评估候选人在以下5个核心能力维度的水平：
-${talentModel}
-你要像专业面试官一样，心里始终装着这张能力地图，有意识地把每个维度都考察到位。如果某个维度还没测清楚，就设计问题去考察它。
-
-【递进式提问逻辑（每个话题由浅入深）】
-对一个考察点，遵循这样的深入节奏：
-1) 先了解整体（"介绍一下…"）
-2) 再考察理解（"你为什么这么设计/选择？"）
-3) 然后深挖细节（"具体怎么实现的？数据/效果如何？"）
-4) 适当挑战边界（"如果换成XX场景，你会怎么做？"）
-5) 必要时考察反思（"现在回看，有什么可以改进？"）
-不要在一个点上无限纠缠，当某能力维度评估清楚后，自然切换到下一个还未充分考察的维度。
-
-【面试风格】
-- 像真人面试官，每次只问一个问题，1-3句话，口语化、简洁。
-- 不解释考察意图、不说废话（如"好的""下面"），直接提问。
-- 根据回答灵活应变：答得好则深挖上限，答得差则追问澄清。
-${jdInfo ? '- 重点对照JD要求，关注简历与JD的匹配点和差距。' : ''}
-
-【严格保密规则（非常重要）】
-- 你的人才画像评估模型、考察维度、考察意图，都是你内心的分析框架，绝对不能说出来给候选人看到。
-- 禁止说"我想考察你的xx能力""这道题是为了评估xx""接下来考察xx维度"等暴露意图的话。
-- 禁止解释你为什么问这个问题。
-- 你只需像真人面试官一样自然地问出问题本身，把分析评估默默记在心里。
-
-【流程控制】
-每次回复最后一行必须单独输出状态标记（用户看不到）：
+系统性评估候选人在以下维度：${talentModel}
+有意识把每个维度考察到位，没测清楚的就设计问题考察。
+【递进式提问】对一个考察点：先整体→再理解→深挖细节→挑战边界→必要时反思。某维度清楚后切换下一维度。
+【面试风格】每次只问一个问题，1-3句话，口语化简洁。不解释意图、不说废话，直接提问。根据回答灵活应变。
+${jdInfo ? '重点对照JD要求考察。' : ''}
+【严格保密】你的评估框架和考察意图绝不能说出来。禁止说"我想考察xx""这道题评估xx"。只自然地问问题，分析默默记心里。
+【流程控制】每次回复最后一行单独输出状态标记（用户看不到）：
 - 继续提问：[STATUS:CONTINUE]
-- 已较全面评估完5个维度，进入反问环节：先说"我的问题差不多了，你有什么想问我的吗？"，再输出 [STATUS:REVERSE]
-- 反问结束：说几句结束语，再输出 [STATUS:END]
-
-现在，请开始面试，说出你的第一个问题（记得加状态标记）。`;
-
+- 已较全面评估，进入反问环节：先说"我的问题差不多了，你有什么想问我的吗？"再输出 [STATUS:REVERSE]
+- 反问结束：说几句结束语再输出 [STATUS:END]
+现在请开始面试，说出第一个问题（记得加状态标记）。`;
 
     state.messages.push({ role:'system', content: systemPrompt });
 
-    // ---------- 进度点 ----------
+    // 进度点
     const dotsBox = document.getElementById('progressDots');
     for(let i=0;i<TOTAL_QUESTIONS;i++){ const d=document.createElement('div'); d.className='flex-1 h-1.5 rounded-full bg-gray-200 transition-all'; dotsBox.appendChild(d); }
     function updateDots(){
@@ -230,160 +187,92 @@ ${jdInfo ? '- 重点对照JD要求，关注简历与JD的匹配点和差距。' 
       document.getElementById('qNow').textContent = state.questionCount;
     }
 
-    // ---------- 对话气泡 ----------
+    // 气泡
     const chatArea = document.getElementById('chatArea');
     function addAIBubble(text){
       const div=document.createElement('div'); div.className='flex gap-3 fade-up';
-      div.innerHTML=`<div class="w-9 h-9 rounded-full bg-indigo/10 flex items-center justify-center text-base flex-shrink-0">🤖</div>
-        <div class="max-w-[80%]"><div class="bg-indigo/5 rounded-2xl rounded-tl-sm px-5 py-3.5 text-sm text-gray-700 leading-relaxed">${text}</div></div>`;
+      div.innerHTML=`<div class="w-9 h-9 rounded-full bg-indigo/10 flex items-center justify-center text-base flex-shrink-0">🤖</div><div class="max-w-[80%]"><div class="bg-indigo/5 rounded-2xl rounded-tl-sm px-5 py-3.5 text-sm text-gray-700 leading-relaxed">${text}</div></div>`;
       chatArea.appendChild(div); scrollBottom();
     }
     function addUserBubble(text){
       const div=document.createElement('div'); div.className='flex gap-3 justify-end fade-up';
-      div.innerHTML=`<div class="max-w-[80%]"><div class="bg-white border border-gray-200 rounded-2xl rounded-tr-sm px-5 py-3.5 text-sm text-gray-700 leading-relaxed">${text}</div></div>
-        <div class="w-9 h-9 rounded-full bg-indigo flex items-center justify-center text-white text-sm flex-shrink-0">我</div>`;
+      div.innerHTML=`<div class="max-w-[80%]"><div class="bg-white border border-gray-200 rounded-2xl rounded-tr-sm px-5 py-3.5 text-sm text-gray-700 leading-relaxed">${text}</div></div><div class="w-9 h-9 rounded-full bg-indigo flex items-center justify-center text-white text-sm flex-shrink-0">我</div>`;
       chatArea.appendChild(div); scrollBottom();
     }
     function addThinking(){
       const div=document.createElement('div'); div.id='thinkingBubble'; div.className='flex gap-3 fade-up';
-      div.innerHTML=`<div class="w-9 h-9 rounded-full bg-indigo/10 flex items-center justify-center text-base flex-shrink-0">🤖</div>
-        <div class="bg-indigo/5 rounded-2xl rounded-tl-sm px-5 py-3.5 text-sm text-gray-400"><span class="typing">面试官思考中</span></div>`;
+      div.innerHTML=`<div class="w-9 h-9 rounded-full bg-indigo/10 flex items-center justify-center text-base flex-shrink-0">🤖</div><div class="bg-indigo/5 rounded-2xl rounded-tl-sm px-5 py-3.5 text-sm text-gray-400"><span class="typing">面试官思考中</span></div>`;
       chatArea.appendChild(div); scrollBottom();
     }
     function removeThinking(){ const t=document.getElementById('thinkingBubble'); if(t) t.remove(); }
     function scrollBottom(){ const m=document.querySelector('main'); setTimeout(()=>m.scrollTop=m.scrollHeight,50); }
 
-    // ---------- 调用 AI ----------
+    // ===== AI 语音播报 (TTS) =====
+    function speak(text){
+      if(!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'zh-CN'; u.rate = 1.0; u.pitch = 1.0;
+      window.speechSynthesis.speak(u);
+    }
+
     async function callAI(messages){
-      const response = await fetch(API_URL, {
-        method:'POST',
+      const response = await fetch(API_URL, { method:'POST',
         headers:{ 'Authorization':'Bearer '+API_KEY, 'Content-Type':'application/json' },
-        body: JSON.stringify({ model: MODEL, enable_thinking:false, messages })
-      });
+        body: JSON.stringify({ model: MODEL, enable_thinking:false, messages }) });
       const data = await response.json();
       if(data.error) throw new Error(JSON.stringify(data.error));
       return data.choices[0].message.content.trim();
     }
 
-    // ---------- AI 出题/追问 ----------
-        let interviewPhase = 'interviewing'; // interviewing / reversing / ended
-
+    let interviewPhase = 'interviewing';
     async function askNextQuestion(){
-      setInputEnabled(false);
-      addThinking();
+      setInputEnabled(false); addThinking();
       try{
         let reply = await callAI(state.messages);
-
-        // 解析状态标记
-        let status = 'CONTINUE';
-        const match = reply.match(/\[STATUS:(\w+)\]/);
-        if(match){ status = match[1]; }
-        // 去掉标记，只显示问题内容
-        const question = reply.replace(/\[STATUS:\w+\]/g, '').trim();
-
-        removeThinking();
-        addAIBubble(question);
-        state.lastQuestion = question;
-        state.messages.push({ role:'assistant', content: reply }); // 存完整(含标记)给AI上下文
-
-        // 根据状态推进
-        if(status === 'END'){
-          // 面试结束
-          state.waitingAnswer = false;
-          setInputEnabled(false);
-          document.getElementById('progressTip').textContent = '面试结束';
-          setTimeout(()=> finishInterview(), 2000);
-          return;
-        }
-
-        if(status === 'REVERSE'){
-          interviewPhase = 'reversing';
-          document.getElementById('progressTip').textContent = '反问环节';
-        } else {
-          state.questionCount++;
-          updateDots();
-          document.getElementById('progressTip').textContent = '请回答';
-        }
-
-        state.waitingAnswer = true;
-        setInputEnabled(true);
+        let status='CONTINUE'; const match=reply.match(/\[STATUS:(\w+)\]/); if(match) status=match[1];
+        const question = reply.replace(/\[STATUS:\w+\]/g,'').trim();
+        removeThinking(); addAIBubble(question); speak(question); // 语音播报
+        state.lastQuestion=question; state.messages.push({role:'assistant',content:reply});
+        if(status==='END'){ state.waitingAnswer=false; setInputEnabled(false); document.getElementById('progressTip').textContent='面试结束'; setTimeout(()=>finishInterview(),2500); return; }
+        if(status==='REVERSE'){ interviewPhase='reversing'; document.getElementById('progressTip').textContent='反问环节'; }
+        else { state.questionCount++; updateDots(); document.getElementById('progressTip').textContent='请回答'; }
+        state.waitingAnswer=true; setInputEnabled(true);
         if(state.inputMode==='voice') document.getElementById('recordHint').textContent='点击麦克风开始回答';
-
-      }catch(err){
-        removeThinking();
-        addAIBubble('⚠️ AI出题失败：'+err.message);
-      }
+      }catch(err){ removeThinking(); addAIBubble('⚠️ AI出题失败：'+err.message); }
     }
 
-
-    // ---------- 用户提交回答 ----------
-        async function submitAnswer(answerText){
+    async function submitAnswer(answerText){
       if(!answerText || !answerText.trim()){ alert('回答内容为空'); return; }
       addUserBubble(answerText);
-      state.messages.push({ role:'user', content: answerText });
-      state.qaRecords.push({ question: state.lastQuestion, answer: answerText });
-      state.waitingAnswer = false;
+      state.messages.push({role:'user',content:answerText});
+      state.qaRecords.push({question:state.lastQuestion,answer:answerText});
+      state.waitingAnswer=false;
       document.getElementById('nextBtn').classList.add('hidden');
-      document.getElementById('textInput').value='';
-      document.getElementById('liveTranscript').textContent='';
-
-      // 不再用固定题数判断，交给AI决定（AI会通过STATUS标记控制）
+      document.getElementById('textInput').value=''; document.getElementById('liveTranscript').textContent='';
       askNextQuestion();
     }
 
-    // ---------- 输入控制 ----------
     function setInputEnabled(enabled){
-      document.getElementById('recordBtn').disabled = !enabled;
-      document.getElementById('switchModeBtn').disabled = !enabled;
-      const txt = document.getElementById('textInput');
-      if(txt) txt.disabled = !enabled;
-      if(state.inputMode==='text'){
-        document.getElementById('nextBtn').classList.toggle('hidden', !enabled);
-        if(enabled) document.getElementById('nextBtn').textContent='✓ 提交回答';
-      }
+      document.getElementById('recordBtn').disabled=!enabled;
+      document.getElementById('switchModeBtn').disabled=!enabled;
+      const txt=document.getElementById('textInput'); if(txt) txt.disabled=!enabled;
+      if(state.inputMode==='text'){ document.getElementById('nextBtn').classList.toggle('hidden',!enabled); if(enabled) document.getElementById('nextBtn').textContent='✓ 提交回答'; }
     }
 
-    // ---------- 文字提交 ----------
-    document.getElementById('nextBtn').addEventListener('click', ()=>{
-      if(state.inputMode==='text'){
-        const txt=document.getElementById('textInput').value.trim();
-        if(!txt){ alert('请先输入回答'); return; }
-        submitAnswer(txt);
-      } else {
-        if(state.isRecording) stopRecording();
-      }
+    document.getElementById('nextBtn').addEventListener('click',()=>{
+      if(state.inputMode==='text'){ const txt=document.getElementById('textInput').value.trim(); if(!txt){alert('请先输入回答');return;} submitAnswer(txt); }
+      else { if(state.isRecording) stopRecording(); }
     });
 
-    // ---------- 切换模式 ----------
-    document.getElementById('switchModeBtn').addEventListener('click', ()=>{
-      state.inputMode = state.inputMode==='voice'?'text':'voice';
+    document.getElementById('switchModeBtn').addEventListener('click',()=>{
+      state.inputMode=state.inputMode==='voice'?'text':'voice';
       const btn=document.getElementById('switchModeBtn');
-      if(state.inputMode==='text'){
-        document.getElementById('voiceMode').classList.add('hidden');
-        document.getElementById('textMode').classList.remove('hidden');
-        btn.textContent='🎙️ 切换语音';
-        if(state.waitingAnswer){ document.getElementById('nextBtn').classList.remove('hidden'); document.getElementById('nextBtn').textContent='✓ 提交回答'; }
-      } else {
-        document.getElementById('voiceMode').classList.remove('hidden');
-        document.getElementById('textMode').classList.add('hidden');
-        btn.textContent='⌨️ 切换文字';
-        document.getElementById('nextBtn').classList.add('hidden');
-      }
+      if(state.inputMode==='text'){ document.getElementById('voiceMode').classList.add('hidden'); document.getElementById('textMode').classList.remove('hidden'); btn.textContent='🎙️ 切换语音'; if(state.waitingAnswer){ document.getElementById('nextBtn').classList.remove('hidden'); document.getElementById('nextBtn').textContent='✓ 提交回答'; } }
+      else { document.getElementById('voiceMode').classList.remove('hidden'); document.getElementById('textMode').classList.add('hidden'); btn.textContent='⌨️ 切换文字'; document.getElementById('nextBtn').classList.add('hidden'); }
     });
 
-    /* ========== 录音功能 ========== */
-    async function requestMic(){
-      try{
-        state.mediaStream = await navigator.mediaDevices.getUserMedia({audio:true});
-        setupAnalyser(state.mediaStream);
-        setupRecognition();
-        return true;
-      }catch(err){
-        const e=document.getElementById('micError'); e.classList.remove('hidden');
-        e.textContent='无法访问麦克风，请改用文字答题，或检查浏览器权限。';
-        return false;
-      }
-    }
+    /* ===== 麦克风音量分析 + 语音识别 ===== */
     let audioCtx, analyser, dataArray, waveAnimId;
     function setupAnalyser(stream){
       audioCtx=new (window.AudioContext||window.webkitAudioContext)();
@@ -392,109 +281,154 @@ ${jdInfo ? '- 重点对照JD要求，关注简历与JD的匹配点和差距。' 
       src.connect(analyser); dataArray=new Uint8Array(analyser.frequencyBinCount);
     }
     function drawWave(){
-      const canvas=document.getElementById('waveCanvas'), ctx=canvas.getContext('2d');
-      function loop(){
-        waveAnimId=requestAnimationFrame(loop);
-        analyser.getByteFrequencyData(dataArray);
-        ctx.clearRect(0,0,canvas.width,canvas.height);
-        const bars=20,gap=2,bw=(canvas.width-(bars-1)*gap)/bars;
-        for(let i=0;i<bars;i++){ const v=dataArray[i]||0,h=Math.max(3,(v/255)*canvas.height);
-          ctx.fillStyle='#6366F1'; ctx.fillRect(i*(bw+gap),(canvas.height-h)/2,bw,h); }
-      }
+      const canvas=document.getElementById('waveCanvas'),ctx=canvas.getContext('2d');
+      function loop(){ waveAnimId=requestAnimationFrame(loop); analyser.getByteFrequencyData(dataArray);
+        ctx.clearRect(0,0,canvas.width,canvas.height); const bars=20,gap=2,bw=(canvas.width-(bars-1)*gap)/bars;
+        for(let i=0;i<bars;i++){ const v=dataArray[i]||0,h=Math.max(3,(v/255)*canvas.height); ctx.fillStyle='#6366F1'; ctx.fillRect(i*(bw+gap),(canvas.height-h)/2,bw,h); } }
       loop();
     }
     function setupRecognition(){
-      const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-      if(!SR){ return; }
-      state.recognition=new SR(); state.recognition.lang='zh-CN';
-      state.recognition.continuous=true; state.recognition.interimResults=true;
-      state.recognition.onresult=(e)=>{
-        let final='',interim='';
-        for(let i=e.resultIndex;i<e.results.length;i++){
-          const t=e.results[i][0].transcript;
-          if(e.results[i].isFinal) final+=t; else interim+=t;
-        }
-        if(final) state.transcript+=final;
-        document.getElementById('liveTranscript').textContent=state.transcript+interim;
-      };
+      const SR=window.SpeechRecognition||window.webkitSpeechRecognition; if(!SR) return;
+      state.recognition=new SR(); state.recognition.lang='zh-CN'; state.recognition.continuous=true; state.recognition.interimResults=true;
+      state.recognition.onresult=(e)=>{ let final='',interim=''; for(let i=e.resultIndex;i<e.results.length;i++){ const t=e.results[i][0].transcript; if(e.results[i].isFinal) final+=t; else interim+=t; } if(final) state.transcript+=final; document.getElementById('liveTranscript').textContent=state.transcript+interim; };
     }
     function startRecording(){
       if(!state.mediaStream || !state.waitingAnswer) return;
-      state.isRecording=true; state.transcript='';
-      document.getElementById('liveTranscript').textContent='';
+      window.speechSynthesis.cancel(); // 用户开始说话，停掉AI语音
+      state.isRecording=true; state.transcript=''; document.getElementById('liveTranscript').textContent='';
       if(state.recognition){ try{state.recognition.start();}catch(e){} }
       document.getElementById('recordBtn').textContent='⏹️';
-      document.getElementById('ring1').classList.remove('hidden');
-      document.getElementById('ring2').classList.remove('hidden');
+      document.getElementById('ring1').classList.remove('hidden'); document.getElementById('ring2').classList.remove('hidden');
       document.getElementById('waveCanvas').classList.remove('hidden');
       document.getElementById('recordHint').textContent='正在录音，再次点击结束';
       if(audioCtx&&audioCtx.state==='suspended') audioCtx.resume();
       drawWave();
     }
     function stopRecording(){
-      if(!state.isRecording) return;
-      state.isRecording=false;
+      if(!state.isRecording) return; state.isRecording=false;
       if(state.recognition){ try{state.recognition.stop();}catch(e){} }
       cancelAnimationFrame(waveAnimId);
       document.getElementById('recordBtn').textContent='🎙️';
-      document.getElementById('ring1').classList.add('hidden');
-      document.getElementById('ring2').classList.add('hidden');
+      document.getElementById('ring1').classList.add('hidden'); document.getElementById('ring2').classList.add('hidden');
       document.getElementById('waveCanvas').classList.add('hidden');
       const answer=state.transcript.trim();
       if(!answer){ document.getElementById('recordHint').textContent='没听清，请重新点击麦克风回答'; return; }
-      setTimeout(()=> submitAnswer(answer), 300);
+      setTimeout(()=> submitAnswer(answer),300);
     }
-    document.getElementById('recordBtn').addEventListener('click', ()=>{
-      if(!state.waitingAnswer) return;
-      state.isRecording ? stopRecording() : startRecording();
-    });
+    document.getElementById('recordBtn').addEventListener('click',()=>{ if(!state.waitingAnswer) return; state.isRecording?stopRecording():startRecording(); });
 
-    /* ---------- 计时 ---------- */
+    /* ===== 计时 ===== */
     function fmt(s){ const m=Math.floor(s/60),ss=s%60; return `${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`; }
     function startTimer(){
       document.getElementById('timer').textContent=fmt(state.totalSeconds);
-      state.timerId=setInterval(()=>{
-        state.totalSeconds--;
-        const t=document.getElementById('timer'); t.textContent=fmt(state.totalSeconds);
-        if(state.totalSeconds<=60) t.classList.add('text-brandorange');
-        if(state.totalSeconds<=0){ clearInterval(state.timerId); finishInterview(); }
-      },1000);
+      state.timerId=setInterval(()=>{ state.totalSeconds--; const t=document.getElementById('timer'); t.textContent=fmt(state.totalSeconds);
+        if(state.totalSeconds<=60) t.classList.add('text-brandorange'); if(state.totalSeconds<=0){ clearInterval(state.timerId); finishInterview(); } },1000);
     }
 
-    /* ---------- 结束面试 ---------- */
-    document.getElementById('endBtn').addEventListener('click',()=>{ const m=document.getElementById('endModal'); m.classList.remove('hidden'); m.classList.add('flex'); });
+    /* ===== 结束面试 + 上传视频 ===== */
+    document.getElementById('endBtn').addEventListener('click',()=> finishInterview());
     document.getElementById('cancelEnd').addEventListener('click',()=>{ const m=document.getElementById('endModal'); m.classList.add('hidden'); m.classList.remove('flex'); });
     document.getElementById('goReport').addEventListener('click',()=>{ window.location.href='报告页.html'; });
-    function finishInterview(){
+
+    let finished = false;
+    async function finishInterview(){
+      if(finished) return; finished=true;
       clearInterval(state.timerId);
-      if(state.mediaStream) state.mediaStream.getTracks().forEach(t=>t.stop());
-      // 保存问答记录，供报告页评分用
+      window.speechSynthesis.cancel();
+
+      // 保存问答记录
       localStorage.setItem('qaRecords', JSON.stringify(state.qaRecords));
       localStorage.setItem('interviewMeta', JSON.stringify({ jobName, levelName, typeList }));
+
       const m=document.getElementById('endModal'); m.classList.remove('hidden'); m.classList.add('flex');
+
+      // 停止视频录制并上传
+      if(state.recordVideo && state.videoRecorder){
+        document.getElementById('endMsg').textContent = '正在保存面试视频，请稍候...';
+        document.getElementById('goReport').disabled = true;
+        await stopAndUploadVideo();
+        document.getElementById('goReport').disabled = false;
+      }
+      document.getElementById('endMsg').textContent = 'AI 即将为你生成评分报告';
+
+      // 停掉麦克风
+      if(state.mediaStream) state.mediaStream.getTracks().forEach(t=>t.stop());
+      if(state.videoStream) state.videoStream.getTracks().forEach(t=>t.stop());
     }
 
-    /* ---------- 麦克风弹窗选择 ---------- */
-    document.getElementById('useVoiceBtn').addEventListener('click', async ()=>{
-      const ok=await requestMic();
-      if(ok){ state.inputMode='voice'; closeMicModal(); startFlow(); }
-    });
-    document.getElementById('useTextBtn').addEventListener('click', ()=>{
-      state.inputMode='text';
-      document.getElementById('switchModeBtn').textContent='🎙️ 切换语音';
-      closeMicModal(); startFlow();
-    });
-    function closeMicModal(){ document.getElementById('micModal').classList.add('hidden'); }
+    async function stopAndUploadVideo(){
+      return new Promise((resolve)=>{
+        state.videoRecorder.onstop = async () => {
+          try {
+            const blob = new Blob(state.videoChunks, { type:'video/webm' });
+            const { data:{ user } } = await sb.auth.getUser();
+            if(!user){ console.warn('未登录，视频不上传'); resolve(); return; }
+            const fileName = `${user.id}/${Date.now()}.webm`;
+            const { error } = await sb.storage.from(VIDEO_BUCKET).upload(fileName, blob, { contentType:'video/webm' });
+            if(error){ console.warn('视频上传失败', error); resolve(); return; }
+            // 拿到公开URL（public桶）
+            const { data } = sb.storage.from(VIDEO_BUCKET).getPublicUrl(fileName);
+            localStorage.setItem('videoUrl', data.publicUrl);
+            console.log('✅ 视频已上传:', data.publicUrl);
+            resolve();
+          } catch(e){ console.warn('上传异常', e); resolve(); }
+        };
+        state.videoRecorder.stop();
+      });
+    }
 
-    /* ---------- 启动 ---------- */
-    function startFlow(){
-      // 设置输入UI
-      if(state.inputMode==='text'){
-        document.getElementById('voiceMode').classList.add('hidden');
-        document.getElementById('textMode').classList.remove('hidden');
+    /* ===== 视频授权弹窗 ===== */
+    document.getElementById('agreeRecordBtn').addEventListener('click', async ()=>{
+      try {
+        // 同时请求摄像头+麦克风
+        state.videoStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
+        // 显示自己画面
+        const sv = document.getElementById('selfVideo');
+        sv.srcObject = state.videoStream; sv.classList.remove('hidden');
+        // 开始录制视频
+        state.videoChunks = [];
+        state.videoRecorder = new MediaRecorder(state.videoStream, { mimeType: getSupportedMime() });
+        state.videoRecorder.ondataavailable = e=>{ if(e.data.size>0) state.videoChunks.push(e.data); };
+        state.videoRecorder.start();
+        state.recordVideo = true;
+        document.getElementById('recBadge').classList.remove('hidden');
+        document.getElementById('recBadge').classList.add('flex');
+        // 用同一个流的音频做语音识别
+        state.mediaStream = state.videoStream;
+        setupAnalyser(state.videoStream); setupRecognition();
+        localStorage.removeItem('videoUrl');
+        closeVideoModal(); startFlow();
+      } catch(err){
+        const e=document.getElementById('videoError'); e.classList.remove('hidden');
+        e.textContent='无法访问摄像头/麦克风：'+err.message+'。可选择"不录制"。';
       }
+    });
+
+    document.getElementById('noRecordBtn').addEventListener('click', async ()=>{
+      state.recordVideo = false;
+      localStorage.removeItem('videoUrl');
+      // 仍然请求麦克风(语音答题用)
+      if(state.inputMode==='voice'){
+        try {
+          state.mediaStream = await navigator.mediaDevices.getUserMedia({ audio:true });
+          setupAnalyser(state.mediaStream); setupRecognition();
+        } catch(err){ state.inputMode='text'; document.getElementById('switchModeBtn').textContent='🎙️ 切换语音'; }
+      }
+      closeVideoModal(); startFlow();
+    });
+
+    function getSupportedMime(){
+      const types=['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm','video/mp4'];
+      for(const t of types){ if(MediaRecorder.isTypeSupported(t)) return t; }
+      return 'video/webm';
+    }
+    function closeVideoModal(){ document.getElementById('videoModal').classList.add('hidden'); }
+
+    /* ===== 启动 ===== */
+    function startFlow(){
+      if(state.inputMode==='text'){ document.getElementById('voiceMode').classList.add('hidden'); document.getElementById('textMode').classList.remove('hidden'); }
       startTimer();
-      askNextQuestion(); // AI出第一题
+      askNextQuestion();
     }
   </script>
 </body>

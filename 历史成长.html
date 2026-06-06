@@ -96,16 +96,13 @@
           .select('*')
           .order('created_at', { ascending: false });
         if(!error && data){
-          history = data.map(r => ({
-            id: r.id,
-            date: new Date(r.created_at).toLocaleString('zh-CN'),
-            jobName: r.job_name,
-            levelName: r.level_name,
-            typeList: r.type_list,
-            totalScore: r.total_score,
-            scores: r.scores,
-            report: r.report
-          }));
+              history = data.map(r => ({
+              id:r.id, date:new Date(r.created_at).toLocaleString('zh-CN'),
+              jobName:r.job_name, levelName:r.level_name, typeList:r.type_list,
+              totalScore:r.total_score, scores:r.scores, report:r.report,
+              qaRecords:r.qa_records, video_url:r.video_url
+            }));
+
         }
       } else {
         // 未登录：读本地
