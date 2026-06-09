@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>简历管理 - AI面镜</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    tailwind.config = { theme: { extend: {
+      colors: { indigo: { DEFAULT:'#6366F1' }, brandgreen:'#10B981', brandorange:'#F59E0B' },
+      fontFamily: { sans:['Inter','PingFang SC','Microsoft YaHei','sans-serif'] },
+      boxShadow: { soft:'0 4px 20px rgba(99,102,241,.08)', softlg:'0 10px 40px rgba(99,102,241,.15)' }
+    }}};
+  </script>
+  <style>
+    body { background:#F9FAFB; color:#111827; }
+    .gradient-btn { background:linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%); transition:all .25s ease; }
+    .gradient-btn:hover { transform:translateY(-2px); box-shadow:0 10px 30px rgba(99,102,241,.35); }
+    .gradient-btn:disabled { opacity:.45; cursor:not-allowed; transform:none; box-shadow:none; }
+  </style>
+</head>
+<body class="font-sans antialiased">
+  <nav class="bg-white border-b border-gray-100 sticky top-0 z-40">
+    <div class="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+      <a href="index.html" class="flex items-center gap-2">
+        <div class="w-9 h-9 rounded-xl gradient-btn flex items-center justify-center text-white">🪞</div>
+        <span class="text-xl font-bold">AI面镜</span>
+      </a>
+      <div class="flex items-center gap-4 text-sm">
+        <a href="个人中心.html" class="text-gray-500 hover:text-indigo">个人中心</a>
+        <button onclick="location.href='配置页.html'" class="gradient-btn text-white font-medium px-5 py-2 rounded-lg">+ 新面试</button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-6 py-8">
+    <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-7">
+      <div>
+        <p class="text-sm text-indigo font-medium mb-1">个人中心 / 简历管理</p>
+        <h1 class="text-3xl font-bold mb-2">管理你的面试背景</h1>
+        <p class="text-gray-500 text-sm">维护一份在线简历和最多 5 版附件简历，开始面试前可选择任意版本。</p>
+      </div>
+      <div class="bg-indigo/5 text-indigo text-sm rounded-xl px-4 py-3">
+        当前使用：<b id="activeResumeName">尚未选择</b>
+      </div>
+    </div>
+
+    <section class="bg-white rounded-2xl shadow-soft p-6 mb-6">
+      <div class="flex items-center justify-between gap-4 mb-5">
+        <div>
+          <h2 class="text-lg font-bold">在线简历 · 基础信息</h2>
+          <p class="text-xs text-gray-400 mt-1">适合快速维护，会在配置面试时作为可选背景。</p>
+        </div>
+        <button id="useOnlineBtn" class="text-sm border border-indigo text-indigo px-4 py-2 rounded-lg hover:bg-indigo/5">设为当前版本</button>
+      </div>
+      <div class="grid md:grid-cols-2 gap-4">
+        <label class="text-sm text-gray-600">姓名
+          <input id="onlineName" class="mt-1 w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-indigo focus:outline-none" placeholder="你的姓名" />
+        </label>
+        <label class="text-sm text-gray-600">目标岗位
+          <input id="onlineJob" class="mt-1 w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-indigo focus:outline-none" placeholder="如：AI产品经理" />
+        </label>
+        <label class="text-sm text-gray-600">工作年限
+          <input id="onlineYears" class="mt-1 w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-indigo focus:outline-none" placeholder="如：3年" />
+        </label>
+        <label class="text-sm text-gray-600">核心技能
+          <input id="onlineSkills" class="mt-1 w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-indigo focus:outline-none" placeholder="如：RAG、产品设计、数据分析" />
+        </label>
+      </div>
+      <label class="block text-sm text-gray-600 mt-4">经历与优势摘要
+        <textarea id="onlineSummary" rows="7" class="mt-1 w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-indigo focus:outline-none resize-y" placeholder="填写教育、工作经历、项目成果与个人优势"></textarea>
+      </label>
+      <div class="flex justify-end mt-4">
+        <button id="saveOnlineBtn" class="gradient-btn text-white font-medium px-6 py-2.5 rounded-xl">保存在线简历</button>
+      </div>
+    </section>
+
+    <section class="bg-white rounded-2xl shadow-soft p-6">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-5">
+        <div>
+          <h2 class="text-lg font-bold">附件简历版本 <span id="versionCount" class="text-sm font-normal text-gray-400">0 / 5</span></h2>
+          <p class="text-xs text-gray-400 mt-1">支持 PDF 或 TXT；Demo 仅在当前浏览器保存解析后的文字，不上传云端。</p>
+        </div>
+        <label id="uploadLabel" class="gradient-btn text-white text-sm font-medium px-5 py-2.5 rounded-xl cursor-pointer text-center">
+          + 上传新版本
+          <input id="resumeFile" type="file" accept=".pdf,.txt,text/plain,application/pdf" class="hidden" />
+        </label>
+      </div>
+      <p id="uploadStatus" class="hidden text-sm rounded-xl px-4 py-3 mb-4"></p>
+      <div id="versionList" class="space-y-3"></div>
+      <div id="emptyVersions" class="border-2 border-dashed border-gray-200 rounded-2xl py-12 text-center">
+        <div class="text-3xl mb-2">📄</div>
+        <p class="font-medium">还没有附件简历</p>
+        <p class="text-sm text-gray-400 mt-1">可上传针对不同岗位优化过的版本。</p>
+      </div>
+    </section>
+  </main>
+
+  <div id="previewModal" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[82vh] flex flex-col">
+      <div class="flex items-center justify-between p-5 border-b border-gray-100">
+        <h3 id="previewTitle" class="font-bold">简历预览</h3>
+        <button id="closePreview" class="text-gray-400 hover:text-gray-700 text-xl">✕</button>
+      </div>
+      <pre id="previewContent" class="p-5 overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-gray-600 font-sans"></pre>
+    </div>
+  </div>
+
+  <script>
+    if(window.pdfjsLib){
+      pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+    const MAX_VERSIONS=5;
+    const fields={
+      name:document.getElementById('onlineName'), job:document.getElementById('onlineJob'),
+      years:document.getElementById('onlineYears'), skills:document.getElementById('onlineSkills'),
+      summary:document.getElementById('onlineSummary')
+    };
+
+    function readJSON(key,fallback){ try{return JSON.parse(localStorage.getItem(key)||JSON.stringify(fallback));}catch(e){return fallback;} }
+    function buildOnlineText(data){
+      return [`姓名：${data.name||'未填写'}`,`目标岗位：${data.job||'未填写'}`,`工作年限：${data.years||'未填写'}`,
+        `核心技能：${data.skills||'未填写'}`,'','经历与优势摘要：',data.summary||'未填写'].join('\n');
+    }
+    function getVersions(){ return readJSON('resumeVersions',[]); }
+    function saveVersions(list){ localStorage.setItem('resumeVersions',JSON.stringify(list.slice(0,MAX_VERSIONS))); }
+    function setCurrent(id,name,content){
+      localStorage.setItem('activeResumeId',id);
+      localStorage.setItem('resumeInfo',content);
+      document.getElementById('activeResumeName').textContent=name;
+      renderVersions();
+    }
+    function loadOnline(){
+      const data=readJSON('onlineResume',{});
+      Object.entries(fields).forEach(([key,el])=>el.value=data[key]||'');
+    }
+    function saveOnline(useAsCurrent=false){
+      const data={}; Object.entries(fields).forEach(([key,el])=>data[key]=el.value.trim());
+      data.updatedAt=new Date().toISOString();
+      localStorage.setItem('onlineResume',JSON.stringify(data));
+      if(data.job) localStorage.setItem('targetJob',data.job);
+      if(useAsCurrent || localStorage.getItem('activeResumeId')==='online') setCurrent('online','在线简历',buildOnlineText(data));
+      showStatus('在线简历已保存。','success');
+    }
+    function showStatus(text,type='info'){
+      const el=document.getElementById('uploadStatus'); el.textContent=text; el.classList.remove('hidden','bg-green-50','text-brandgreen','bg-orange-50','text-brandorange','bg-indigo/5','text-indigo');
+      el.classList.add(type==='success'?'bg-green-50':type==='error'?'bg-orange-50':'bg-indigo/5',type==='success'?'text-brandgreen':type==='error'?'text-brandorange':'text-indigo');
+    }
+    function formatDate(value){ return new Date(value).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}); }
+    function renderVersions(){
+      const list=getVersions(), active=localStorage.getItem('activeResumeId');
+      const box=document.getElementById('versionList'); box.innerHTML='';
+      document.getElementById('versionCount').textContent=`${list.length} / ${MAX_VERSIONS}`;
+      document.getElementById('emptyVersions').classList.toggle('hidden',list.length>0);
+      document.getElementById('uploadLabel').classList.toggle('opacity-50',list.length>=MAX_VERSIONS);
+      const online=readJSON('onlineResume',null);
+      document.getElementById('activeResumeName').textContent=active==='online'?'在线简历':(list.find(v=>v.id===active)?.name || '尚未选择');
+      list.forEach(v=>{
+        const item=document.createElement('article');
+        item.className=`border-2 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 ${active===v.id?'border-indigo bg-indigo/5':'border-gray-100'}`;
+        item.innerHTML=`<div class="min-w-0"><div class="flex items-center gap-2"><b class="truncate">${escapeHtml(v.name)}</b>${active===v.id?'<span class="text-xs bg-indigo text-white rounded-full px-2 py-0.5">当前使用</span>':''}</div><p class="text-xs text-gray-400 mt-1">${formatDate(v.createdAt)} · ${Math.max(1,Math.round((v.content||'').length/1000))}k 字符</p></div><div class="flex gap-2 flex-shrink-0"><button data-action="preview" data-id="${v.id}" class="text-sm text-gray-500 border border-gray-200 rounded-lg px-3 py-2">预览</button><button data-action="use" data-id="${v.id}" class="text-sm text-indigo border border-indigo rounded-lg px-3 py-2">用于面试</button><button data-action="delete" data-id="${v.id}" class="text-sm text-brandorange border border-orange-200 rounded-lg px-3 py-2">删除</button></div>`;
+        box.appendChild(item);
+      });
+      if(active==='online' && !online) localStorage.removeItem('activeResumeId');
+    }
+    function escapeHtml(value){ return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+    async function extractPDF(file){
+      const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise;
+      const pages=[]; for(let i=1;i<=pdf.numPages;i++){ const page=await pdf.getPage(i); const text=await page.getTextContent(); pages.push(text.items.map(x=>x.str).join(' ')); }
+      return pages.join('\n');
+    }
+    async function handleUpload(file){
+      const versions=getVersions();
+      if(versions.length>=MAX_VERSIONS){ showStatus('最多只能保存 5 版附件简历，请先删除旧版本。','error'); return; }
+      showStatus('正在读取并解析附件，请稍候…');
+      try{
+        const content=file.name.toLowerCase().endsWith('.pdf')?await extractPDF(file):await file.text();
+        if(!content.trim()) throw new Error('没有读取到文字内容');
+        const item={id:`resume_${Date.now()}`,name:file.name,content:content.trim(),createdAt:new Date().toISOString()};
+        versions.unshift(item); saveVersions(versions); setCurrent(item.id,item.name,item.content);
+        showStatus(`“${file.name}”已保存并设为当前版本。`,'success');
+      }catch(e){ showStatus(`附件解析失败：${e.message||'请换一个文件重试'}`,'error'); }
+      document.getElementById('resumeFile').value='';
+    }
+
+    document.getElementById('saveOnlineBtn').addEventListener('click',()=>saveOnline(false));
+    document.getElementById('useOnlineBtn').addEventListener('click',()=>{ saveOnline(true); showStatus('在线简历已设为当前面试版本。','success'); });
+    document.getElementById('resumeFile').addEventListener('change',e=>{ if(e.target.files[0]) handleUpload(e.target.files[0]); });
+    document.getElementById('versionList').addEventListener('click',e=>{
+      const btn=e.target.closest('button[data-action]'); if(!btn) return;
+      const versions=getVersions(), item=versions.find(v=>v.id===btn.dataset.id); if(!item) return;
+      if(btn.dataset.action==='use') setCurrent(item.id,item.name,item.content);
+      if(btn.dataset.action==='preview'){ document.getElementById('previewTitle').textContent=item.name; document.getElementById('previewContent').textContent=item.content; const m=document.getElementById('previewModal'); m.classList.remove('hidden'); m.classList.add('flex'); }
+      if(btn.dataset.action==='delete' && confirm(`确定删除“${item.name}”吗？`)){ saveVersions(versions.filter(v=>v.id!==item.id)); if(localStorage.getItem('activeResumeId')===item.id){localStorage.removeItem('activeResumeId');localStorage.removeItem('resumeInfo');} renderVersions(); }
+    });
+    document.getElementById('closePreview').addEventListener('click',()=>{const m=document.getElementById('previewModal');m.classList.add('hidden');m.classList.remove('flex');});
+
+    loadOnline();
+    if(!localStorage.getItem('resumeVersions') && localStorage.getItem('resumeInfo')){
+      saveVersions([{id:`resume_${Date.now()}`,name:'现有简历（迁移）',content:localStorage.getItem('resumeInfo'),createdAt:new Date().toISOString()}]);
+    }
+    renderVersions();
+  </script>
+</body>
+</html>

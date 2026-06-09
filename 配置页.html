@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>配置面试 - AI面镜</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -73,10 +74,10 @@
           <div class="space-y-1">
             <!-- 步骤1 -->
             <div class="flex items-center gap-3 py-2">
-              <div class="w-7 h-7 rounded-full bg-brandgreen text-white text-xs flex items-center justify-center">✓</div>
+              <div id="backgroundStepDot" class="w-7 h-7 rounded-full bg-brandorange text-white text-xs flex items-center justify-center">1</div>
               <div>
                 <div class="text-sm font-medium">背景信息</div>
-                <div id="backgroundStatus" class="text-xs text-gray-400">已完成</div>
+                <div id="backgroundStatus" class="text-xs text-gray-400">待填写</div>
               </div>
             </div>
             <div class="ml-3.5 h-4 border-l-2 border-gray-100"></div>
@@ -117,7 +118,55 @@
           <p class="text-gray-500">根据你的目标定制专属面试，所有选项都会影响题目和评分权重</p>
         </div>
 
-        <!-- 模块1：选择岗位 -->
+        <!-- 模块1：背景信息 -->
+        <section id="backgroundSection" class="bg-white rounded-2xl shadow-soft p-6 mb-6">
+          <div class="flex flex-col md:flex-row md:items-start justify-between gap-3 mb-5">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="text-lg">🧾</span>
+                <h2 class="text-lg font-bold">确认本次面试背景</h2>
+                <span class="text-brandorange text-sm">岗位 JD 必填</span>
+              </div>
+              <p id="identityHint" class="text-xs text-gray-400 mt-1 ml-7">可选择已有简历，或为本次面试临时上传一份新简历。</p>
+            </div>
+            <a href="简历管理.html" class="text-sm text-indigo hover:underline">管理历史简历 →</a>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-5">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">本次使用的简历 / 背景</label>
+              <select id="resumeSource" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-indigo focus:outline-none bg-white"></select>
+              <label class="block border-2 border-dashed border-gray-200 hover:border-indigo rounded-xl p-4 mt-3 cursor-pointer transition">
+                <div class="font-medium text-sm">+ 临时上传新简历（PDF / TXT）</div>
+                <div class="text-xs text-gray-400 mt-1">登录用户上传后会保存为历史附件版本，最多 5 版。</div>
+                <input id="newResumeFile" type="file" accept=".pdf,.txt,text/plain,application/pdf" class="hidden" />
+              </label>
+              <p id="resumeUploadStatus" class="text-xs text-gray-400 mt-2 min-h-[18px]"></p>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">补充背景 <span class="text-gray-400 font-normal">（选填）</span></label>
+              <div class="grid grid-cols-2 gap-3 mb-3">
+                <input id="backgroundYears" class="border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:border-indigo focus:outline-none" placeholder="工作年限，如 3 年" />
+                <input id="backgroundSkills" class="border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:border-indigo focus:outline-none" placeholder="核心技能，如 RAG" />
+              </div>
+              <textarea id="backgroundText" rows="5" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-indigo focus:outline-none resize-y" placeholder="免登录用户可在这里粘贴简历内容；也可补充希望面试官重点了解的信息。"></textarea>
+            </div>
+          </div>
+
+          <div class="border-t border-gray-100 mt-5 pt-5">
+            <div class="flex items-center justify-between gap-3 mb-2">
+              <label class="text-sm font-medium text-gray-700">本次目标岗位 JD <span class="text-brandorange">*每场需重新提供</span></label>
+              <label class="text-sm text-indigo cursor-pointer hover:underline">
+                上传 JD 图片并由 AI 解析
+                <input id="jdImageInput" type="file" accept="image/*" class="hidden" />
+              </label>
+            </div>
+            <textarea id="jdText" rows="6" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-indigo focus:outline-none resize-y" placeholder="请粘贴本次目标岗位 JD，或上传招聘页面截图由 AI 解析。"></textarea>
+            <p id="jdStatus" class="text-xs text-gray-400 mt-2">为避免沿用旧岗位信息，进入本页时不会自动带入上一场 JD。</p>
+          </div>
+        </section>
+
+        <!-- 模块2：选择岗位 -->
         <section class="bg-white rounded-2xl shadow-soft p-6 mb-6">
           <div class="flex items-center gap-2 mb-4">
             <span class="text-lg">🎯</span>
@@ -233,13 +282,13 @@
           </div>
           <div class="grid grid-cols-3 gap-3" data-group="duration" data-mode="single">
             <div class="option-card rounded-xl p-4 relative text-center" data-value="quick">
-              <div class="font-medium">快速版</div><div class="text-xs text-gray-400 mt-0.5">10分钟·4-5题</div>
+              <div class="font-medium">快速版</div><div class="text-xs text-gray-400 mt-0.5">15分钟·约5题</div>
             </div>
             <div class="option-card rounded-xl p-4 relative text-center" data-value="standard">
-              <div class="font-medium">标准版</div><div class="text-xs text-gray-400 mt-0.5">20分钟·6-8题</div>
+              <div class="font-medium">标准版</div><div class="text-xs text-gray-400 mt-0.5">30分钟·约8题</div>
             </div>
             <div class="option-card rounded-xl p-4 relative text-center" data-value="deep">
-              <div class="font-medium">深度版</div><div class="text-xs text-gray-400 mt-0.5">40分钟·10-12题</div>
+              <div class="font-medium">深度版</div><div class="text-xs text-gray-400 mt-0.5">60分钟·约12题</div>
             </div>
           </div>
         </section>
@@ -252,13 +301,13 @@
           </div>
           <div class="grid md:grid-cols-3 gap-3" data-group="input" data-mode="single">
             <div class="option-card rounded-xl p-4 relative" data-value="voice">
-              <span class="absolute top-3 right-3 bg-brandgreen text-white text-xs px-2 py-0.5 rounded-full">推荐</span>
               <div class="text-2xl mb-1">🎙️</div>
               <div class="font-medium">语音回答</div><div class="text-xs text-gray-400 mt-0.5">更贴近真实面试</div>
             </div>
             <div class="option-card rounded-xl p-4 relative" data-value="video">
+              <span class="absolute top-3 right-3 bg-brandgreen text-white text-xs px-2 py-0.5 rounded-full">推荐</span>
               <div class="text-2xl mb-1">📹</div>
-              <div class="font-medium">视频回答</div><div class="text-xs text-gray-400 mt-0.5">摄像头画面 + 语音作答</div>
+              <div class="font-medium">视频回答</div><div class="text-xs text-gray-400 mt-0.5">最贴近真实面试场景</div>
             </div>
             <div class="option-card rounded-xl p-4 relative" data-value="text">
               <div class="text-2xl mb-1">⌨️</div>
@@ -284,147 +333,137 @@
 
   <!-- ===== 交互脚本 ===== -->
   <script>
-    const selections = { job: null, level: null, type: [], duration: 'standard', input: 'voice' };
+    const API_KEY = "sk-ebd50b34fb01401da5d5e02caddfa24e";
+    const API_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
+    const selections = { job:null, level:null, type:[], duration:'standard', input:'video' };
+    const jobNames = { 'ai-pm':'AI产品经理','ai-ops':'AI运营','agent':'Agent开发','algo':'算法工程师','frontend':'前端开发','backend':'后端开发' };
+    const levelNames = { intern:'实习', campus:'校招', junior:'初级', mid:'中级', senior:'高级', expert:'专家' };
+    const durNames = { quick:'快速版 15分钟', standard:'标准版 30分钟', deep:'深度版 60分钟' };
+    const inputNames = { voice:'语音回答', video:'视频回答', text:'文字回答' };
+    const isLoggedIn = Object.keys(localStorage).some(key=>key.startsWith('sb-') && key.endsWith('-auth-token'));
+    let sourceMap = {};
 
-    // 默认选中标准版和语音
+    if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    localStorage.removeItem('jdInfo');
     document.querySelector('[data-group="duration"] [data-value="standard"]').classList.add('selected');
-    document.querySelector('[data-group="input"] [data-value="voice"]').classList.add('selected');
+    document.querySelector('[data-group="input"] [data-value="video"]').classList.add('selected');
+    document.getElementById('identityHint').textContent=isLoggedIn
+      ? '已登录：可选择个人中心已有简历，或上传一份新版本。'
+      : '免登录模式：可临时上传简历或直接填写背景，本次信息仅保存在当前浏览器。';
 
-    document.getElementById('backgroundStatus').textContent =
-      (localStorage.getItem('resumeInfo') || localStorage.getItem('jdInfo')) ? '已完成' : '已跳过';
-
-    document.querySelectorAll('.option-card').forEach(card => {
-      card.setAttribute('role','button');
-      card.setAttribute('tabindex','0');
-      card.setAttribute('aria-pressed',card.classList.contains('selected') ? 'true' : 'false');
-      const selectCard = () => {
-        const group = card.closest('[data-group]');
-        const groupName = group.dataset.group;
-        const mode = group.dataset.mode;
-        const value = card.dataset.value;
-
-        if (mode === 'single') {
-          group.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
-          card.classList.add('selected');
-          selections[groupName] = value;
-        } else {
-          card.classList.toggle('selected');
-          if (card.classList.contains('selected')) {
-            selections[groupName].push(value);
-          } else {
-            selections[groupName] = selections[groupName].filter(v => v !== value);
-          }
+    function readJSON(key,fallback){ try{return JSON.parse(localStorage.getItem(key)||JSON.stringify(fallback));}catch(e){return fallback;} }
+    function onlineText(data){ return data ? [`姓名：${data.name||'未填写'}`,`目标岗位：${data.job||'未填写'}`,`工作年限：${data.years||'未填写'}`,`核心技能：${data.skills||'未填写'}`,'','经历与优势摘要：',data.summary||'未填写'].join('\n') : ''; }
+    function loadResumeSources(){
+      const select=document.getElementById('resumeSource'); select.innerHTML=''; sourceMap={};
+      const add=(id,name,content)=>{ sourceMap[id]=content||''; const option=document.createElement('option');option.value=id;option.textContent=name;select.appendChild(option); };
+      add('none','不使用附件，仅填写下方背景','');
+      const online=readJSON('onlineResume',null); if(online) add('online','在线简历（基础信息）',onlineText(online));
+      readJSON('resumeVersions',[]).forEach((v,i)=>add(v.id,`附件 ${i+1}：${v.name}`,v.content));
+      const active=localStorage.getItem('activeResumeId');
+      if(active && sourceMap[active]!==undefined) select.value=active;
+      else if(localStorage.getItem('resumeInfo')){ add('current','当前浏览器已有简历',localStorage.getItem('resumeInfo')); select.value='current'; }
+      updateBackgroundStatus();
+    }
+    function updateBackgroundStatus(){
+      const complete=Boolean(document.getElementById('jdText').value.trim());
+      document.getElementById('backgroundStatus').textContent=complete?'已确认':'待填写 JD';
+      const dot=document.getElementById('backgroundStepDot'); dot.textContent=complete?'✓':'1';
+      dot.className=`w-7 h-7 rounded-full text-white text-xs flex items-center justify-center ${complete?'bg-brandgreen':'bg-brandorange'}`;
+      updateState();
+    }
+    function saveBackground(){
+      const selected=sourceMap[document.getElementById('resumeSource').value]||'';
+      const years=document.getElementById('backgroundYears').value.trim();
+      const skills=document.getElementById('backgroundSkills').value.trim();
+      const extra=document.getElementById('backgroundText').value.trim();
+      const combined=[selected,years?`补充工作年限：${years}`:'',skills?`补充核心技能：${skills}`:'',extra?`补充背景：\n${extra}`:''].filter(Boolean).join('\n\n');
+      if(combined) localStorage.setItem('resumeInfo',combined); else localStorage.removeItem('resumeInfo');
+      localStorage.setItem('jdInfo',document.getElementById('jdText').value.trim());
+    }
+    async function extractPDF(file){
+      const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise;
+      const pages=[]; for(let i=1;i<=pdf.numPages;i++){const p=await pdf.getPage(i);const t=await p.getTextContent();pages.push(t.items.map(x=>x.str).join(' '));}
+      return pages.join('\n').trim();
+    }
+    document.getElementById('newResumeFile').addEventListener('change',async e=>{
+      const file=e.target.files[0]; if(!file) return;
+      const status=document.getElementById('resumeUploadStatus'); status.textContent='正在解析简历…'; status.className='text-xs text-indigo mt-2 min-h-[18px]';
+      try{
+        const content=file.name.toLowerCase().endsWith('.pdf')?await extractPDF(file):await file.text();
+        if(!content.trim()) throw new Error('未读取到文字');
+        if(isLoggedIn){
+          const versions=readJSON('resumeVersions',[]);
+          if(versions.length>=5) throw new Error('历史附件已达 5 版，请先到简历管理删除旧版本');
+          const item={id:`resume_${Date.now()}`,name:file.name,content:content.trim(),createdAt:new Date().toISOString()};
+          versions.unshift(item); localStorage.setItem('resumeVersions',JSON.stringify(versions)); localStorage.setItem('activeResumeId',item.id);
+          loadResumeSources(); document.getElementById('resumeSource').value=item.id;
+        }else{
+          sourceMap.temporary=content.trim();
+          const option=document.createElement('option');option.value='temporary';option.textContent=`本次临时简历：${file.name}`;document.getElementById('resumeSource').appendChild(option);document.getElementById('resumeSource').value='temporary';
         }
+        status.textContent='简历已解析，可继续配置。'; status.className='text-xs text-brandgreen mt-2 min-h-[18px]';
+      }catch(err){status.textContent=`解析失败：${err.message}`;status.className='text-xs text-brandorange mt-2 min-h-[18px]';}
+      e.target.value='';
+    });
+    document.getElementById('jdImageInput').addEventListener('change',async e=>{
+      const file=e.target.files[0]; if(!file) return;
+      const status=document.getElementById('jdStatus'); status.textContent='AI 正在识别图片中的岗位 JD…'; status.className='text-xs text-indigo mt-2';
+      try{
+        const dataUrl=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(file);});
+        const response=await fetch(API_URL,{method:'POST',headers:{Authorization:'Bearer '+API_KEY,'Content-Type':'application/json'},body:JSON.stringify({model:'qwen-vl-max',messages:[{role:'user',content:[{type:'image_url',image_url:{url:dataUrl}},{type:'text',text:'请准确提取图片中的岗位职责、任职要求和加分项，只输出整理后的中文岗位JD，不要解释。'}]}]})});
+        const data=await response.json(); if(data.error) throw new Error(data.error.message||'识别服务异常');
+        document.getElementById('jdText').value=data.choices?.[0]?.message?.content?.trim()||''; status.textContent='JD 图片已解析，请核对后开始面试。'; status.className='text-xs text-brandgreen mt-2'; updateBackgroundStatus();
+      }catch(err){status.textContent=`图片解析失败：${err.message||'请改为粘贴文字'}`;status.className='text-xs text-brandorange mt-2';}
+      e.target.value='';
+    });
+    document.getElementById('jdText').addEventListener('input',updateBackgroundStatus);
+
+    document.querySelectorAll('.option-card').forEach(card=>{
+      card.setAttribute('role','button');card.setAttribute('tabindex','0');card.setAttribute('aria-pressed',card.classList.contains('selected')?'true':'false');
+      const selectCard=()=>{
+        const group=card.closest('[data-group]'), groupName=group.dataset.group, value=card.dataset.value;
+        if(group.dataset.mode==='single'){group.querySelectorAll('.option-card').forEach(c=>c.classList.remove('selected'));card.classList.add('selected');selections[groupName]=value;}
+        else{card.classList.toggle('selected');selections[groupName]=card.classList.contains('selected')?[...selections[groupName],value]:selections[groupName].filter(v=>v!==value);}
         group.querySelectorAll('.option-card').forEach(c=>c.setAttribute('aria-pressed',c.classList.contains('selected')?'true':'false'));
         if(groupName==='input'){
           document.getElementById('deviceStatus').textContent=value==='text'?'无需检测':'开始前自动检测';
-          const help=document.getElementById('deviceHelp');
-          help.textContent=value==='video'
-            ? '视频回答需要摄像头和麦克风。检测通过后设备会立即释放。'
-            : value==='voice'
-              ? '语音回答需要麦克风。检测通过后设备会立即释放。'
-              : '文字回答无需摄像头或麦克风权限。';
-          help.className='text-xs text-gray-400 mt-3';
+          const help=document.getElementById('deviceHelp'); help.textContent=value==='video'?'推荐使用视频：需要摄像头和麦克风，检测后会立即释放。':value==='voice'?'语音回答需要麦克风。检测通过后设备会立即释放。':'文字回答无需摄像头或麦克风权限。';help.className='text-xs text-gray-400 mt-3';
         }
         updateState();
       };
-      card.addEventListener('click', selectCard);
-      card.addEventListener('keydown', e=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); selectCard(); } });
+      card.addEventListener('click',selectCard);card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectCard();}});
     });
-
-    const jobNames = { 'ai-pm':'AI产品经理','ai-ops':'AI运营','agent':'Agent开发','algo':'算法工程师','frontend':'前端开发','backend':'后端开发' };
-    const levelNames = { intern:'实习', campus:'校招', junior:'初级', mid:'中级', senior:'高级', expert:'专家' };
-    const durNames = { quick:'快速版', standard:'标准版', deep:'深度版' };
-    const inputNames = { voice:'语音回答', video:'视频回答', text:'文字回答' };
-
-    function updateState() {
-      const btn = document.getElementById('startBtn');
-      const summary = document.getElementById('summary');
-      const ready = selections.job && selections.level;
-      btn.disabled = !ready;
-
-      if (ready) {
-        let txt = `${jobNames[selections.job]} · ${levelNames[selections.level]} · ${durNames[selections.duration]} · ${inputNames[selections.input]}`;
-        if (selections.type.length) txt += ` · ${selections.type.length}种类型`;
-        summary.textContent = txt;
-        summary.classList.add('text-indigo', 'font-medium');
-      } else {
-        summary.textContent = '请先选择岗位和职级（必选）';
-        summary.classList.remove('text-indigo', 'font-medium');
-      }
+    function updateState(){
+      const hasJD=Boolean(document.getElementById('jdText').value.trim()), ready=selections.job&&selections.level&&hasJD;
+      document.getElementById('startBtn').disabled=!ready;
+      const summary=document.getElementById('summary');
+      if(!hasJD){summary.textContent='请先填写或上传本次岗位 JD（必填）';summary.classList.remove('text-indigo','font-medium');}
+      else if(!selections.job||!selections.level){summary.textContent='请再选择岗位和职级（必选）';summary.classList.remove('text-indigo','font-medium');}
+      else{summary.textContent=`${jobNames[selections.job]} · ${levelNames[selections.level]} · ${durNames[selections.duration]} · ${inputNames[selections.input]}`;summary.classList.add('text-indigo','font-medium');}
     }
-
-    function mediaErrorMessage(error, inputMode){
-      const target=inputMode==='video'?'摄像头或麦克风':'麦克风';
-      const messages={
-        NotAllowedError:`${target}权限被浏览器或系统拒绝。请在地址栏站点设置和系统隐私设置中允许访问。`,
-        SecurityError:`当前页面无法安全访问${target}。请使用 HTTPS 页面并避免在受限内置浏览器中打开。`,
-        NotFoundError:`没有检测到可用的${target}，请连接设备后重试。`,
-        DevicesNotFoundError:`没有检测到可用的${target}，请连接设备后重试。`,
-        NotReadableError:`${target}已授权，但当前无法读取。它可能正被微信、会议软件或其他浏览器占用，请关闭后重试。`,
-        TrackStartError:`${target}已授权，但当前无法启动。请关闭其他正在使用设备的应用后重试。`,
-        OverconstrainedError:`当前设备不支持请求的媒体参数，请更换设备或选择其他回答方式。`,
-        AbortError:`${target}启动被中断，请刷新页面后重试。`,
-        NotSupportedError:'当前浏览器不支持语音转文字，请使用最新版 Chrome、Edge 或 Safari，或选择文字回答。'
-      };
-      return messages[error?.name] || `${target}检测失败：${error?.message || '未知错误'}。`;
+    function mediaErrorMessage(error,inputMode){
+      const target=error?.deviceLabel||(inputMode==='video'?'摄像头或麦克风':'麦克风');
+      const messages={NotAllowedError:`${target}权限被浏览器或系统拒绝。请检查地址栏站点设置和系统隐私设置。`,SecurityError:`当前页面无法安全访问${target}。`,NotFoundError:`没有检测到可用的${target}。`,DevicesNotFoundError:`没有检测到可用的${target}。`,NotReadableError:`${target}已授权但无法读取，可能正被其他应用占用。`,TrackStartError:`${target}已授权但无法启动。`,OverconstrainedError:'当前设备不支持请求的媒体参数。',NotSupportedError:'当前浏览器不支持语音转文字，请改用最新版 Chrome、Edge 或 Safari。'};
+      return messages[error?.name]||`${target}检测失败：${error?.message||'未知错误'}。`;
     }
-
     async function testMedia(inputMode){
-      if(!window.isSecureContext) throw Object.assign(new Error('页面不是安全上下文'),{name:'SecurityError'});
-      if(!navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error('浏览器不支持媒体设备访问'),{name:'SecurityError'});
-      const constraints=inputMode==='video' ? {audio:true,video:{facingMode:'user'}} : {audio:true};
-      let stream;
-      try{
-        stream=await navigator.mediaDevices.getUserMedia(constraints);
-      }catch(error){
-        if(inputMode==='video' && error?.name==='OverconstrainedError'){
-          stream=await navigator.mediaDevices.getUserMedia({audio:true,video:true});
-        }else{
-          throw error;
-        }
-      }
-      const hasAudio=stream.getAudioTracks().length>0;
-      const hasVideo=stream.getVideoTracks().length>0;
-      stream.getTracks().forEach(track=>track.stop());
-      if(!hasAudio) throw Object.assign(new Error('未返回音频轨道'),{name:'NotFoundError'});
-      if(inputMode==='video' && !hasVideo) throw Object.assign(new Error('未返回视频轨道'),{name:'NotFoundError'});
-      if(!(window.SpeechRecognition || window.webkitSpeechRecognition)){
-        throw Object.assign(new Error('浏览器不支持语音转文字'),{name:'NotSupportedError'});
-      }
+      if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error('浏览器不支持媒体设备访问'),{name:'SecurityError'});
+      async function test(constraints,label){let stream;try{stream=await navigator.mediaDevices.getUserMedia(constraints);if(!stream.getTracks().length)throw Object.assign(new Error('未返回设备轨道'),{name:'NotFoundError'});}catch(e){e.deviceLabel=label;throw e;}finally{if(stream)stream.getTracks().forEach(t=>t.stop());}}
+      await test({audio:true},'麦克风'); if(inputMode==='video') await test({video:true},'摄像头');
+      if(!(window.SpeechRecognition||window.webkitSpeechRecognition)) throw Object.assign(new Error('浏览器不支持语音转文字'),{name:'NotSupportedError'});
     }
-
-    document.getElementById('startBtn').addEventListener('click', async () => {
-      if (!selections.job || !selections.level) return;
-      const btn=document.getElementById('startBtn');
-      const deviceStatus=document.getElementById('deviceStatus');
-      const deviceHelp=document.getElementById('deviceHelp');
-      if(selections.input==='voice' || selections.input==='video'){
-        btn.disabled=true;
-        deviceStatus.textContent=selections.input==='video'?'正在检测摄像头和麦克风...':'正在检测麦克风...';
-        deviceHelp.textContent='浏览器可能会请求设备权限，请选择允许。';
-        deviceHelp.className='text-xs text-indigo mt-3';
-        try{
-          await testMedia(selections.input);
-          deviceStatus.textContent=selections.input==='video'?'摄像头和麦克风检测通过':'麦克风检测通过';
-          deviceHelp.textContent='设备检测通过，正在进入面试...';
-          deviceHelp.className='text-xs text-brandgreen mt-3';
-        }catch(e){
-          deviceStatus.textContent='设备检测未通过';
-          deviceHelp.textContent=mediaErrorMessage(e,selections.input);
-          deviceHelp.className='text-xs text-brandorange mt-3';
-          btn.disabled=false;
-          return;
-        }
-      } else {
-        deviceStatus.textContent='文字回答无需设备检测';
+    document.getElementById('startBtn').addEventListener('click',async()=>{
+      if(!selections.job||!selections.level||!document.getElementById('jdText').value.trim()){document.getElementById('backgroundSection').scrollIntoView({behavior:'smooth'});return;}
+      saveBackground();
+      const btn=document.getElementById('startBtn'), deviceStatus=document.getElementById('deviceStatus'), deviceHelp=document.getElementById('deviceHelp');
+      if(selections.input!=='text'){
+        btn.disabled=true;deviceStatus.textContent=selections.input==='video'?'正在检测摄像头和麦克风…':'正在检测麦克风…';deviceHelp.textContent='浏览器可能会请求设备权限，请选择允许。';deviceHelp.className='text-xs text-indigo mt-3';
+        try{await testMedia(selections.input);deviceStatus.textContent='设备检测通过';deviceHelp.textContent='正在进入面试…';deviceHelp.className='text-xs text-brandgreen mt-3';}
+        catch(e){deviceStatus.textContent='设备检测未通过';deviceHelp.textContent=mediaErrorMessage(e,selections.input);deviceHelp.className='text-xs text-brandorange mt-3';btn.disabled=false;return;}
       }
-      // 把配置存到本地，供面试页读取
-      localStorage.setItem('interviewConfig', JSON.stringify(selections));
-      // 跳转到面试页
-      window.location.href = '面试页.html';
+      localStorage.setItem('interviewConfig',JSON.stringify(selections));window.location.href='面试页.html';
     });
-
+    loadResumeSources(); updateBackgroundStatus();
   </script>
 
 </body>

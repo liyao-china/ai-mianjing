@@ -51,7 +51,7 @@
           <a href="个人中心.html" class="flex items-center gap-3 px-4 py-3 rounded-xl bg-indigo/5 text-indigo text-sm font-medium">👤 账户信息</a>
           <a href="历史成长.html" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 text-sm text-gray-600">📈 历史成长</a>
           <a href="会员.html" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 text-sm text-gray-600">💳 我的会员</a>
-          <a href="简历上传.html" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 text-sm text-gray-600">📄 简历管理</a>
+          <a href="简历管理.html" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 text-sm text-gray-600">📄 简历管理</a>
           <a href="设置.html" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 text-sm text-gray-600">⚙️ 设置</a>
           <a href="#" onclick="logout();return false;" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 text-sm text-brandorange">🚪 退出登录</a>
         </div>
@@ -70,9 +70,9 @@
         <div class="bg-white rounded-2xl shadow-soft p-6 mb-6">
           <h2 class="text-lg font-bold mb-4">使用概况</h2>
           <div class="grid grid-cols-3 gap-4">
-            <div class="text-center"><div class="text-2xl font-bold gradient-text" id="statCount">--</div><div class="text-sm text-gray-400 mt-1">累计面试</div></div>
-            <div class="text-center"><div class="text-2xl font-bold gradient-text" id="statBest">--</div><div class="text-sm text-gray-400 mt-1">最佳得分</div></div>
-            <div class="text-center"><div class="text-2xl font-bold gradient-text" id="statImprove">--</div><div class="text-sm text-gray-400 mt-1">分数提升</div></div>
+            <div class="text-center"><div class="text-2xl font-bold gradient-text" id="statCount">0</div><div class="text-sm text-gray-400 mt-1">累计面试</div></div>
+            <div class="text-center"><div class="text-2xl font-bold gradient-text" id="statBest">0</div><div class="text-sm text-gray-400 mt-1">最佳得分</div></div>
+            <div class="text-center"><div class="text-2xl font-bold gradient-text" id="statImprove">0</div><div class="text-sm text-gray-400 mt-1">较上次提升</div></div>
           </div>
         </div>
 
@@ -95,7 +95,7 @@
               <span class="text-sm font-medium">
                 <span id="resumeStatus" class="text-gray-400">未上传</span>
                 <button onclick="viewResume()" id="viewResumeBtn" class="text-indigo text-xs ml-2 hidden">查看</button>
-                <button onclick="location.href='简历上传.html'" class="text-indigo text-xs ml-2">更新</button>
+                <button onclick="location.href='简历管理.html'" class="text-indigo text-xs ml-2">管理</button>
               </span>
             </div>
             <div class="flex items-center justify-between py-2">
@@ -116,7 +116,7 @@
       </div>
       <div class="p-5 overflow-y-auto text-sm text-gray-600 whitespace-pre-wrap leading-relaxed" id="resumeContent"></div>
       <div class="p-4 border-t border-gray-100 text-right">
-        <button onclick="location.href='简历上传.html'" class="gradient-btn text-white text-sm font-medium px-5 py-2 rounded-lg">重新上传 / 编辑</button>
+        <button onclick="location.href='简历管理.html'" class="gradient-btn text-white text-sm font-medium px-5 py-2 rounded-lg">管理全部版本</button>
       </div>
     </div>
   </div>
@@ -149,9 +149,11 @@
 
       // 简历状态
       const resumeInfo = localStorage.getItem('resumeInfo') || '';
-      if(resumeInfo.trim()){
+      const versions = JSON.parse(localStorage.getItem('resumeVersions') || '[]');
+      const onlineResume = localStorage.getItem('onlineResume');
+      if(resumeInfo.trim() || versions.length || onlineResume){
         const s = document.getElementById('resumeStatus');
-        s.textContent = '已上传'; s.className = 'text-brandgreen';
+        s.textContent = `${onlineResume ? '在线简历' : '无在线简历'} · ${versions.length}/5 版附件`; s.className = 'text-brandgreen';
         document.getElementById('viewResumeBtn').classList.remove('hidden');
       }
 
@@ -170,15 +172,15 @@
         const { data, error } = await sb.from('interview_records').select('total_score').order('created_at', { ascending: false });
         if(error || !data || !data.length){
           document.getElementById('statCount').textContent = '0';
-          document.getElementById('statBest').textContent = '--';
-          document.getElementById('statImprove').textContent = '--';
+          document.getElementById('statBest').textContent = '0';
+          document.getElementById('statImprove').textContent = '0';
           return;
         }
         const scores = data.map(r => r.total_score);
         const best = Math.max(...scores).toFixed(1);
         const latest = scores[0];
-        const first = scores[scores.length-1];
-        const improve = (latest - first).toFixed(1);
+        const previous = scores[1] ?? latest;
+        const improve = (latest - previous).toFixed(1);
         document.getElementById('statCount').textContent = data.length;
         document.getElementById('statBest').textContent = best;
         document.getElementById('statImprove').textContent = (improve>=0?'+':'') + improve;

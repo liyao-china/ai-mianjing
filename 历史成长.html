@@ -44,30 +44,30 @@
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
       <div class="bg-white rounded-2xl shadow-soft p-5">
         <div class="text-sm text-gray-400 mb-1">累计面试</div>
-        <div class="text-3xl font-bold">12 <span class="text-base font-normal text-gray-400">次</span></div>
+        <div class="text-3xl font-bold"><span id="historyCount">0</span> <span class="text-base font-normal text-gray-400">次</span></div>
       </div>
       <div class="bg-white rounded-2xl shadow-soft p-5">
         <div class="text-sm text-gray-400 mb-1">最新得分</div>
-        <div class="text-3xl font-bold gradient-text">78.5</div>
+        <div id="historyLatest" class="text-3xl font-bold gradient-text">0</div>
       </div>
       <div class="bg-white rounded-2xl shadow-soft p-5">
         <div class="text-sm text-gray-400 mb-1">最佳得分</div>
-        <div class="text-3xl font-bold text-brandgreen">85.0</div>
+        <div id="historyBest" class="text-3xl font-bold text-brandgreen">0</div>
       </div>
       <div class="bg-white rounded-2xl shadow-soft p-5">
-        <div class="text-sm text-gray-400 mb-1">较首次提升</div>
-        <div class="text-3xl font-bold text-brandgreen">+23.5</div>
+        <div class="text-sm text-gray-400 mb-1">较上次提升</div>
+        <div id="historyImprove" class="text-3xl font-bold text-brandgreen">0</div>
       </div>
     </div>
 
     <!-- 总分趋势 -->
-    <div class="bg-white rounded-2xl shadow-soft p-6 mb-6">
+    <div id="trendPanel" class="bg-white rounded-2xl shadow-soft p-6 mb-6">
       <h2 class="text-lg font-bold mb-4">综合得分趋势</h2>
       <canvas id="trendChart" height="100"></canvas>
     </div>
 
     <!-- 各维度趋势 -->
-    <div class="bg-white rounded-2xl shadow-soft p-6 mb-6">
+    <div id="dimPanel" class="bg-white rounded-2xl shadow-soft p-6 mb-6">
       <h2 class="text-lg font-bold mb-4">各维度成长对比</h2>
       <canvas id="dimChart" height="110"></canvas>
     </div>
@@ -75,6 +75,12 @@
     <!-- 历史记录列表 -->
     <div class="bg-white rounded-2xl shadow-soft p-6">
       <h2 class="text-lg font-bold mb-4">历史面试记录</h2>
+      <div id="emptyState" class="hidden text-center py-12">
+        <div class="text-5xl mb-4">📊</div>
+        <h2 class="text-xl font-bold mb-2">还没有面试记录</h2>
+        <p class="text-gray-400 text-sm mb-6">完成一场模拟面试，这里就会显示你的真实成长轨迹。</p>
+        <button onclick="location.href='配置页.html'" class="gradient-btn text-white font-medium px-8 py-3 rounded-xl">开始第一场面试</button>
+      </div>
       <div class="space-y-2" id="historyList"></div>
     </div>
   </div>
@@ -113,13 +119,9 @@
 
     function initPage(){
       if (history.length === 0) {
-        document.querySelector('.max-w-5xl').innerHTML = `
-          <div class="text-center py-20">
-            <div class="text-5xl mb-4">📊</div>
-            <h2 class="text-xl font-bold mb-2">还没有面试记录</h2>
-            <p class="text-gray-400 text-sm mb-6">完成一场模拟面试，这里就会显示你的成长轨迹</p>
-            <button onclick="location.href='配置页.html'" class="gradient-btn text-white font-medium px-8 py-3 rounded-xl">开始第一场面试</button>
-          </div>`;
+        document.getElementById('emptyState').classList.remove('hidden');
+        document.getElementById('trendPanel').classList.add('hidden');
+        document.getElementById('dimPanel').classList.add('hidden');
       } else {
         renderStats(); renderTrend(); renderHistory();
       }
@@ -134,19 +136,12 @@
       const scores = history.map(h=>h.totalScore);
       const latest = scores[0];
       const best = Math.max(...scores);
-      const first = scores[scores.length-1];
-      const improve = (latest - first).toFixed(1);
-      const set = (txt, val) => { const el=[...document.querySelectorAll('.text-3xl')].find(e=>e.previousElementSibling && e.previousElementSibling.textContent.includes(txt)); if(el) el.innerHTML=val; };
-
-      document.querySelectorAll('.grid .bg-white').forEach((card)=>{
-        const label = card.querySelector('.text-sm')?.textContent || '';
-        const numEl = card.querySelector('.text-3xl');
-        if(!numEl) return;
-        if(label.includes('累计面试')) numEl.innerHTML = history.length + ' <span class="text-base font-normal text-gray-400">次</span>';
-        else if(label.includes('最新得分')) numEl.textContent = latest;
-        else if(label.includes('最佳得分')) numEl.textContent = best;
-        else if(label.includes('提升')) numEl.textContent = (improve>=0?'+':'') + improve;
-      });
+      const previous = scores[1] ?? latest;
+      const improve = Number(latest - previous).toFixed(1);
+      document.getElementById('historyCount').textContent=history.length;
+      document.getElementById('historyLatest').textContent=Number(latest||0).toFixed(1);
+      document.getElementById('historyBest').textContent=Number(best||0).toFixed(1);
+      document.getElementById('historyImprove').textContent=(improve>0?'+':'')+improve;
     }
 
     function renderTrend(){
@@ -160,8 +155,8 @@
       });
 
       // 维度对比(首次vs最新)
-      const first = history[history.length-1].scores;
-      const latest = history[0].scores;
+      const first = history[history.length-1].scores || {};
+      const latest = history[0].scores || {};
       const keys = ['jobMatch','logic','fluency','depth','confidence','value'];
       new Chart(document.getElementById('dimChart'), {
         type:'bar',
