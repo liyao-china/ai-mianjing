@@ -19,6 +19,10 @@
     .gradient-btn { background: linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%); transition: all .25s ease; }
     .gradient-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(99,102,241,0.4); }
     .gradient-text { background: linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  
+    /* 页面进入动画（暖色主题统一） */
+    @keyframes pageFade { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:none} }
+    body > div, body > main { animation: pageFade .5s ease both; }
   </style>
 </head>
 <body class="font-sans antialiased">
@@ -100,6 +104,7 @@
         const { data, error } = await supabaseClient
           .from('interview_records')
           .select('*')
+          .eq('user_id', user.id) // 显式按用户隔离（服务端另有 RLS 双保险）
           .order('created_at', { ascending: false });
         if(!error && data){
               history = data.map(r => ({
@@ -190,13 +195,50 @@
             <div class="text-sm text-gray-400 w-32">${r.date}</div>
             <div class="text-sm font-medium">${r.jobName} · ${r.levelName}</div>
             <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">${r.typeList}</span>
+            ${r.video_url?'<span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">🎬 含录像</span>':''}
+            ${r.report&&r.report.videoAnalysis?'<span class="text-xs bg-indigo/10 text-indigo px-2 py-0.5 rounded">🎥 含镜头分析</span>':''}
           </div>
           <div class="flex items-center gap-3">
             <span class="text-lg font-bold" style="color:${c}">${r.totalScore}</span>
+            ${r.video_url?'<button class="del-video text-xs px-2.5 py-1 rounded-lg border border-red-200 text-red-500 hover:bg-red-50 transition" title="删除这条面试录像">🗑 删录像</button>':''}
             <span class="text-gray-300 text-sm">查看报告 →</span>
           </div>`;
+        // 行内"删录像"按钮：只删视频，保留报告与评分
+        const delBtn=el.querySelector('.del-video');
+        if(delBtn){
+          delBtn.addEventListener('click', async (ev)=>{
+            ev.stopPropagation();
+            if(!confirm('确定删除这条面试录像吗？删除后无法恢复，面试报告和评分会保留。')) return;
+            delBtn.disabled=true; delBtn.textContent='删除中…';
+            const ok=await deleteRecordVideo(r);
+            if(ok){ r.video_url=null; renderHistory(); }
+            else { delBtn.disabled=false; delBtn.textContent='🗑 删录像'; alert('删除失败，请稍后再试。'); }
+          });
+        }
         list.appendChild(el);
       });
+    }
+
+    // 删除某条记录的录像（云端 / 本地两种来源都兼容）
+    async function deleteRecordVideo(r){
+      try{
+        const VIDEO_BUCKET='interview-videos';
+        let path=r.video_url;
+        if(/^https?:\/\//i.test(path)){
+          const m=path.match(/\/interview-videos\/(.+?)(\?|$)/);
+          path=m?decodeURIComponent(m[1]):null;
+        }
+        if(path){ const { error }=await supabaseClient.storage.from(VIDEO_BUCKET).remove([path]); if(error) console.warn('存储删除失败', error); }
+        if(r.id){
+          const { error }=await supabaseClient.from('interview_records').update({ video_url:null }).eq('id', r.id);
+          if(error){ console.warn('清除记录视频引用失败', error); return false; }
+        } else {
+          const h=JSON.parse(localStorage.getItem('interviewHistory')||'[]');
+          h.forEach(item=>{ if(item.video_url===r.video_url) item.video_url=null; });
+          localStorage.setItem('interviewHistory', JSON.stringify(h));
+        }
+        return true;
+      }catch(e){ console.warn('删除录像异常', e); return false; }
     }
   </script>
 </body>

@@ -10,7 +10,8 @@
       theme: {
         extend: {
           colors: {
-            indigo: { DEFAULT: '#6366F1' },
+            indigo: { DEFAULT: '#6366F1', dark: '#4F46E5' },
+            ink: '#16122B',
             brandgreen: '#10B981',
             brandorange: '#F59E0B',
           },
@@ -20,21 +21,7 @@
           boxShadow: {
             soft: '0 4px 20px rgba(99,102,241,0.08)',
             softlg: '0 10px 40px rgba(99,102,241,0.15)',
-          },
-          animation: {
-            'float': 'float 6s ease-in-out infinite',
-            'float-slow': 'float 8s ease-in-out infinite',
-            'pulse-ring': 'pulseRing 2s ease-out infinite',
-          },
-          keyframes: {
-            float: {
-              '0%, 100%': { transform: 'translateY(0px)' },
-              '50%': { transform: 'translateY(-20px)' },
-            },
-            pulseRing: {
-              '0%': { transform: 'scale(0.95)', opacity: '0.7' },
-              '100%': { transform: 'scale(1.4)', opacity: '0' },
-            },
+            card: '0 1px 2px rgba(22,18,43,0.04), 0 8px 24px rgba(22,18,43,0.06)',
           },
         },
       },
@@ -42,31 +29,69 @@
   </script>
   <style>
     html { scroll-behavior: smooth; }
-    body { background: #F9FAFB; color: #111827; }
+    body { background: #FFFFFF; color: #16122B; }
+    ::selection { background: rgba(99,102,241,.2); }
+
     .gradient-text {
-      background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
-      -webkit-background-clip: text;
-      background-clip: text;
-      -webkit-text-fill-color: transparent;
+      background: linear-gradient(120deg, #6366F1 10%, #8B5CF6 60%, #A78BFA 100%);
+      -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
     }
     .gradient-btn {
       background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
-      transition: all .25s ease;
+      transition: transform .2s ease, box-shadow .2s ease;
     }
-    .gradient-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 10px 30px rgba(99,102,241,0.4);
-    }
-    .nav-blur { backdrop-filter: blur(12px); background: rgba(249,250,251,0.8); }
-    .card-hover { transition: all .3s ease; }
-    .card-hover:hover { transform: translateY(-6px); box-shadow: 0 12px 40px rgba(99,102,241,0.15); }
-    .blob {
-      position: absolute;
-      border-radius: 50%;
-      filter: blur(60px);
-      opacity: 0.5;
-      z-index: 0;
-    }
+    .gradient-btn:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(99,102,241,0.35); }
+    .gradient-btn:active { transform: translateY(0); }
+
+    /* CTA 按钮箭头微动效 */
+    .btn-arrow .arr { display:inline-block; transition: transform .2s ease; }
+    .btn-arrow:hover .arr { transform: translateX(4px); }
+
+    .nav-blur { backdrop-filter: blur(12px); background: rgba(255,255,255,0.85); }
+    .section-alt { background: #F7F7FD; }
+
+    .card-hover { transition: transform .25s ease, box-shadow .25s ease; }
+    .card-hover:hover { transform: translateY(-6px); box-shadow: 0 16px 44px rgba(99,102,241,0.14); }
+
+    /* ===== 滚动渐入系统 ===== */
+    .reveal { opacity: 0; transform: translateY(26px); transition: opacity .65s ease, transform .65s ease; transition-delay: var(--d, 0s); }
+    .reveal.in-view { opacity: 1; transform: none; }
+    @media (prefers-reduced-motion: reduce) { .reveal { transition: none; opacity: 1; transform: none; } }
+
+    /* ===== Hero 对话循环演示（10s 一轮）===== */
+    .demo-seq { opacity: 0; }
+    @keyframes seqShow { 0%{opacity:0;transform:translateY(10px)} 4%{opacity:1;transform:none} 90%{opacity:1;transform:none} 96%{opacity:0;transform:translateY(-6px)} 100%{opacity:0} }
+    .seq-1 { animation: seqShow 10s ease infinite; }
+    .seq-2 { animation: seqShow 10s ease infinite; animation-delay: 1.8s; }
+    .seq-3 { animation: seqShow 10s ease infinite; animation-delay: 4.2s; }
+    .seq-4 { animation: seqShow 10s ease infinite; animation-delay: 6.2s; }
+    /* 输入中指示器：只在用户回答出现前显示 */
+    @keyframes typingWindow { 0%,8%{opacity:0} 12%{opacity:1} 18%{opacity:1} 22%{opacity:0} 100%{opacity:0} }
+    .seq-typing { opacity:0; animation: typingWindow 10s ease infinite; }
+    @keyframes blinkDot { 0%,80%,100%{opacity:.25} 40%{opacity:1} }
+    .tdot { width:5px;height:5px;border-radius:9999px;background:#6366F1;display:inline-block;animation:blinkDot 1.2s infinite; }
+    .tdot:nth-child(2){animation-delay:.2s} .tdot:nth-child(3){animation-delay:.4s}
+
+    @keyframes floatY { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-12px)} }
+    .float-slow { animation: floatY 7s ease-in-out infinite; }
+
+    /* 麦克风呼吸环 */
+    @keyframes pulseRing { 0%{transform:scale(.9);opacity:.6} 100%{transform:scale(1.6);opacity:0} }
+    .pulse-ring { animation: pulseRing 2s ease-out infinite; }
+
+    /* ===== 岗位跑马灯 ===== */
+    .marquee { overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); }
+    .marquee-track { display: flex; gap: 12px; width: max-content; animation: marquee 26s linear infinite; }
+    .marquee:hover .marquee-track { animation-play-state: paused; }
+    @keyframes marquee { from{transform:translateX(0)} to{transform:translateX(-50%)} }
+
+    /* 报告维度条：进入视口后填充 */
+    .bar-fill { width: 0; transition: width 1.1s cubic-bezier(.22,.8,.36,1); transition-delay: .2s; }
+    .in-view .bar-fill { width: var(--w); }
+
+    /* 步骤连接线 */
+    .step-line { position: absolute; top: 28px; left: 16.6%; right: 16.6%; height: 2px;
+      background: repeating-linear-gradient(90deg, #C7D2FE 0 8px, transparent 8px 16px); }
   </style>
 </head>
 <body class="font-sans antialiased">
@@ -74,91 +99,114 @@
   <!-- ===== 导航栏 ===== -->
   <nav id="nav" class="fixed top-0 left-0 w-full z-50 transition-all duration-300">
     <div class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-      <!-- Logo -->
       <a href="index.html" class="flex items-center gap-2">
         <div class="w-9 h-9 rounded-xl gradient-btn flex items-center justify-center text-white text-lg">🪞</div>
         <span class="text-xl font-bold">AI面镜</span>
       </a>
-      <!-- 中间导航 -->
       <div class="hidden md:flex items-center gap-8 text-sm text-gray-500">
+        <a href="#how" class="hover:text-indigo transition">怎么练</a>
         <a href="#features" class="hover:text-indigo transition">产品功能</a>
-        <a href="#jobs" class="hover:text-indigo transition">支持岗位</a>
+        <a href="#report" class="hover:text-indigo transition">评分报告</a>
         <a href="#pricing" class="hover:text-indigo transition">定价</a>
       </div>
-      <!-- 右侧按钮 -->
       <div class="flex items-center gap-3">
         <button onclick="location.href='登录页.html'" class="text-sm text-gray-600 hover:text-indigo transition px-3 py-2">登录</button>
-        <button class="gradient-btn text-white text-sm font-medium px-5 py-2.5 rounded-xl">免费体验</button>
+        <button class="gradient-btn btn-arrow text-white text-sm font-medium px-5 py-2.5 rounded-xl">免费体验 <span class="arr">→</span></button>
       </div>
     </div>
   </nav>
 
-  <!-- ===== Hero 主视觉 ===== -->
-  <section class="relative pt-32 pb-20 overflow-hidden">
-    <!-- 背景装饰光晕 -->
-    <div class="blob w-96 h-96 bg-indigo top-10 right-0"></div>
-    <div class="blob w-72 h-72 bg-purple-400 top-40 left-0"></div>
-    <!-- 漂浮几何 -->
-    <div class="absolute top-32 left-20 w-16 h-16 rounded-2xl bg-indigo/10 animate-float"></div>
-    <div class="absolute top-60 right-32 w-12 h-12 rounded-full border-2 border-purple-300/40 animate-float-slow"></div>
-    <div class="absolute bottom-20 left-1/3 w-8 h-8 rounded-lg bg-brandgreen/20 animate-float"></div>
+  <!-- ===== Hero ===== -->
+  <section class="relative pt-32 pb-16 overflow-hidden">
+    <!-- 轻量背景：网格 + 顶部紫雾 -->
+    <div class="absolute inset-0 pointer-events-none" style="background:
+      radial-gradient(800px 360px at 70% -80px, rgba(139,92,246,0.10), transparent 60%),
+      radial-gradient(600px 300px at 15% -60px, rgba(99,102,241,0.08), transparent 60%);"></div>
 
     <div class="max-w-6xl mx-auto px-6 relative z-10">
-      <div class="grid md:grid-cols-2 gap-12 items-center">
+      <div class="grid md:grid-cols-2 gap-14 items-center">
         <!-- 左侧文案 -->
         <div>
-          <span class="inline-flex items-center gap-1.5 bg-indigo/10 text-indigo text-sm font-medium px-4 py-1.5 rounded-full mb-6">
-            ✨ 专为 AI 行业打造
+          <span class="reveal inline-flex items-center gap-1.5 bg-indigo/10 text-indigo text-sm font-medium px-4 py-1.5 rounded-full mb-6">
+            ✨ 真实人设 AI 面试官 · 专为 AI 行业打造
           </span>
-          <h1 class="text-5xl font-bold leading-tight mb-6">
-            像照镜子一样，<br />
-            看清你的<span class="gradient-text">面试表现</span>
+          <h1 class="reveal text-5xl font-bold leading-[1.18] mb-6" style="--d:.08s">
+            像照镜子一样，<br />看清你的<span class="gradient-text">面试表现</span>
           </h1>
-          <p class="text-lg text-gray-500 mb-8 leading-relaxed">
-            AI 面试官实时追问，6 大维度专业评分，<br />
-            让每一次练习都有迹可循。
+          <p class="reveal text-lg text-gray-500 mb-8 leading-relaxed" style="--d:.16s">
+            Mentor 面、Leader 面、HR 面三种真实人设，<br />
+            实时追问不留情面，6 大维度告诉你差距在哪。
           </p>
-          <div class="flex flex-wrap gap-4 mb-4">
-            <button class="gradient-btn text-white font-medium px-7 py-3.5 rounded-xl flex items-center gap-2">
-              🎙️ 免费开始模拟面试
+          <div class="reveal flex flex-wrap gap-4 mb-8" style="--d:.24s">
+            <button class="gradient-btn btn-arrow text-white font-medium px-7 py-3.5 rounded-xl flex items-center gap-2">
+              🎙️ 免费开始模拟面试 <span class="arr">→</span>
             </button>
-            <button onclick="location.href='报告页.html?sample=1'" class="bg-white text-indigo font-medium px-7 py-3.5 rounded-xl border-2 border-indigo/20 hover:border-indigo transition flex items-center gap-2">
-            ▶ 看示例报告
+            <button onclick="location.href='报告页.html?sample=1'" class="bg-white text-indigo font-medium px-7 py-3.5 rounded-xl border-2 border-indigo/20 hover:border-indigo hover:shadow-soft transition">
+              ▶ 看示例报告
             </button>
           </div>
-          <p class="text-sm text-gray-400">无需注册即可体验 · 每天 1 次免费</p>
+          <!-- 数字信任条 -->
+          <div class="reveal flex items-center gap-8" style="--d:.32s">
+            <div><div class="text-2xl font-bold text-ink"><span class="count" data-target="6">0</span> 大</div><div class="text-xs text-gray-400 mt-0.5">评分维度</div></div>
+            <div class="w-px h-8 bg-gray-200"></div>
+            <div><div class="text-2xl font-bold text-ink"><span class="count" data-target="8">0</span>+ 类</div><div class="text-xs text-gray-400 mt-0.5">覆盖岗位</div></div>
+            <div class="w-px h-8 bg-gray-200"></div>
+            <div><div class="text-2xl font-bold text-ink"><span class="count" data-target="3">0</span> 种</div><div class="text-xs text-gray-400 mt-0.5">面试官人设</div></div>
+          </div>
         </div>
 
-        <!-- 右侧面试界面预览 -->
-        <div class="relative">
-          <div class="bg-white rounded-3xl shadow-softlg p-6 relative z-10">
-            <div class="flex items-center justify-between mb-4 text-xs text-gray-400">
-              <span>AI产品经理 · 中级 · 技术面</span>
+        <!-- 右侧：循环播放的面试演示 -->
+        <div class="relative reveal" style="--d:.2s">
+          <div class="bg-white rounded-3xl shadow-card border border-gray-100 p-6 relative z-10">
+            <div class="flex items-center justify-between mb-5 text-xs text-gray-400">
+              <span class="flex items-center gap-2">
+                <span class="flex gap-1"><span class="w-2.5 h-2.5 rounded-full bg-red-300"></span><span class="w-2.5 h-2.5 rounded-full bg-amber-300"></span><span class="w-2.5 h-2.5 rounded-full bg-green-300"></span></span>
+                AI产品经理 · 业务二面 · Leader面
+              </span>
               <span>⏱️ 12:30</span>
             </div>
-            <div class="space-y-3">
-              <!-- AI气泡 -->
-              <div class="flex gap-2">
-                <div class="w-8 h-8 rounded-full bg-indigo/10 flex items-center justify-center text-sm flex-shrink-0">🤖</div>
-                <div class="bg-indigo/5 rounded-2xl rounded-tl-sm px-4 py-3 text-sm text-gray-700">
-                  你提到在项目中使用了 RAG 架构，能具体说说如何解决检索召回准确率低的问题吗？
+            <div class="space-y-3 min-h-[230px]">
+              <!-- AI 提问 -->
+              <div class="demo-seq seq-1 flex gap-2">
+                <div class="w-8 h-8 rounded-full bg-indigo/10 flex items-center justify-center text-sm flex-shrink-0">🧭</div>
+                <div class="bg-indigo/5 rounded-2xl rounded-tl-sm px-4 py-3 text-sm text-gray-700 leading-relaxed">
+                  你提到把召回准确率提升了 20%，这个数据是怎么验证的？
                 </div>
               </div>
-              <!-- 用户气泡 -->
-              <div class="flex gap-2 justify-end">
-                <div class="bg-white border border-gray-200 rounded-2xl rounded-tr-sm px-4 py-3 text-sm text-gray-700">
-                  我当时主要从两个方面优化，首先是引入混合检索...
+              <!-- 输入中 -->
+              <div class="demo-seq seq-typing flex gap-2 justify-end">
+                <div class="bg-white border border-gray-200 rounded-2xl rounded-tr-sm px-4 py-3.5 flex gap-1 items-center">
+                  <span class="tdot"></span><span class="tdot"></span><span class="tdot"></span>
                 </div>
+              </div>
+              <!-- 用户回答 -->
+              <div class="demo-seq seq-2 flex gap-2 justify-end">
+                <div class="bg-white border border-gray-200 rounded-2xl rounded-tr-sm px-4 py-3 text-sm text-gray-700 leading-relaxed max-w-[85%]">
+                  我们建了 500 条评测集，灰度上线后对比了线上采纳率…
+                </div>
+              </div>
+              <!-- AI 追问 -->
+              <div class="demo-seq seq-3 flex gap-2">
+                <div class="w-8 h-8 rounded-full bg-indigo/10 flex items-center justify-center text-sm flex-shrink-0">🧭</div>
+                <div class="bg-indigo/5 rounded-2xl rounded-tl-sm px-4 py-3 text-sm text-gray-700 leading-relaxed">
+                  评测集谁标注的？如果资源砍半，你先保哪个指标？
+                </div>
+              </div>
+              <!-- 实时分析标签 -->
+              <div class="demo-seq seq-4 flex justify-center pt-1">
+                <span class="inline-flex items-center gap-1.5 bg-brandgreen/10 text-brandgreen text-xs font-medium px-3 py-1.5 rounded-full">
+                  ⚡ AI 正在记录：数据验证 ✓ 资源权衡 追问中…
+                </span>
               </div>
             </div>
             <!-- 录音按钮 -->
-            <div class="flex justify-center mt-6 relative">
-              <div class="absolute w-16 h-16 rounded-full bg-indigo/30 animate-pulse-ring"></div>
-              <div class="w-16 h-16 rounded-full gradient-btn flex items-center justify-center text-white text-2xl relative z-10">🎙️</div>
+            <div class="flex justify-center mt-5 relative">
+              <div class="absolute w-14 h-14 rounded-full bg-indigo/30 pulse-ring"></div>
+              <div class="w-14 h-14 rounded-full gradient-btn flex items-center justify-center text-white text-xl relative z-10">🎙️</div>
             </div>
           </div>
           <!-- 浮动评分卡 -->
-          <div class="absolute -bottom-6 -left-6 bg-white rounded-2xl shadow-softlg p-4 z-20 animate-float-slow">
+          <div class="absolute -bottom-7 -left-7 bg-white rounded-2xl shadow-softlg border border-gray-100 p-4 z-20 float-slow">
             <div class="text-xs text-gray-400 mb-1">综合得分</div>
             <div class="text-3xl font-bold gradient-text">78.5</div>
             <div class="text-xs text-brandgreen font-medium">中级水平 ↑6.2</div>
@@ -168,161 +216,155 @@
     </div>
   </section>
 
-  <!-- ===== 核心价值 3 卡片 ===== -->
-  <section id="features" class="py-20">
-    <div class="max-w-6xl mx-auto px-6">
-      <div class="text-center mb-14">
-        <h2 class="text-3xl font-bold mb-3">为什么选择 AI面镜</h2>
-        <p class="text-gray-500">不只是练习，更是一套完整的能力提升闭环</p>
+  <!-- ===== 岗位跑马灯 ===== -->
+  <section class="py-10 border-y border-gray-100">
+    <p class="text-center text-xs text-gray-400 mb-5 tracking-widest">覆盖 AI 行业核心岗位 · 初级到专家全职级</p>
+    <div class="marquee max-w-6xl mx-auto px-6">
+      <div class="marquee-track" id="marqueeTrack">
+        <span class="bg-indigo/5 text-indigo px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap">📦 AI产品经理</span>
+        <span class="bg-indigo/5 text-indigo px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap">📊 AI运营</span>
+        <span class="bg-indigo/5 text-indigo px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap">🤖 Agent开发</span>
+        <span class="bg-indigo/5 text-indigo px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap">🧠 算法工程师</span>
+        <span class="bg-indigo/5 text-indigo px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap">🎨 前端开发</span>
+        <span class="bg-indigo/5 text-indigo px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap">⚙️ 后端开发</span>
+        <span class="bg-indigo/5 text-indigo px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap">🧪 测试开发</span>
+        <span class="bg-indigo/5 text-indigo px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap">👁 NLP / CV / 多模态</span>
       </div>
-      <div class="grid md:grid-cols-3 gap-6">
-        <!-- 卡片1 -->
-        <div class="bg-white rounded-2xl p-8 shadow-soft card-hover">
-          <div class="w-14 h-14 rounded-2xl bg-indigo/10 flex items-center justify-center text-2xl mb-5">🎙️</div>
-          <h3 class="text-xl font-bold mb-3">真实对话模拟</h3>
-          <p class="text-gray-500 leading-relaxed">AI 面试官语音提问 + 智能追问，根据你的回答即兴深挖，还原真实面试压力。</p>
+    </div>
+  </section>
+
+  <!-- ===== 三步练习系统 ===== -->
+  <section id="how" class="py-24">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="text-center mb-16">
+        <p class="reveal text-sm font-semibold text-indigo tracking-widest mb-3">HOW IT WORKS</p>
+        <h2 class="reveal text-4xl font-bold mb-4" style="--d:.08s">一套被验证过的练习系统</h2>
+        <p class="reveal text-gray-500" style="--d:.16s">不是刷题库，而是像真实面试一样被追问、被评估、被指出问题</p>
+      </div>
+      <div class="grid md:grid-cols-3 gap-8 relative">
+        <div class="step-line hidden md:block"></div>
+        <div class="reveal text-center relative" style="--d:0s">
+          <div class="w-14 h-14 rounded-2xl gradient-btn text-white text-xl font-bold flex items-center justify-center mx-auto mb-5 relative z-10">1</div>
+          <h3 class="text-xl font-bold mb-3">选择你的面试官</h3>
+          <p class="text-gray-500 text-sm leading-relaxed">Mentor 面抠执行细节，Leader 面挑战你的判断，HR 面深挖动机——三种人设，对应真实面试的每一关。</p>
         </div>
-        <!-- 卡片2 -->
-        <div class="bg-white rounded-2xl p-8 shadow-soft card-hover">
-          <div class="w-14 h-14 rounded-2xl bg-brandgreen/10 flex items-center justify-center text-2xl mb-5">📊</div>
-          <h3 class="text-xl font-bold mb-3">6 维专业评分</h3>
-          <p class="text-gray-500 leading-relaxed">不止打分，每道题给出优化示例，还能与高分回答并排对比，知道差距在哪。</p>
+        <div class="reveal text-center relative" style="--d:.12s">
+          <div class="w-14 h-14 rounded-2xl gradient-btn text-white text-xl font-bold flex items-center justify-center mx-auto mb-5 relative z-10">2</div>
+          <h3 class="text-xl font-bold mb-3">像真的一样去面</h3>
+          <p class="text-gray-500 text-sm leading-relaxed">语音/视频作答，AI 根据你的简历和 JD 实时追问。回答含糊？它会让你给出具体数字和案例。</p>
         </div>
-        <!-- 卡片3 -->
-        <div class="bg-white rounded-2xl p-8 shadow-soft card-hover">
-          <div class="w-14 h-14 rounded-2xl bg-brandorange/10 flex items-center justify-center text-2xl mb-5">📈</div>
-          <h3 class="text-xl font-bold mb-3">成长可视化</h3>
-          <p class="text-gray-500 leading-relaxed">历史曲线追踪每次进步，基于弱项生成个性化练习计划，看见自己的成长。</p>
+        <div class="reveal text-center relative" style="--d:.24s">
+          <div class="w-14 h-14 rounded-2xl gradient-btn text-white text-xl font-bold flex items-center justify-center mx-auto mb-5 relative z-10">3</div>
+          <h3 class="text-xl font-bold mb-3">拿到可执行的反馈</h3>
+          <p class="text-gray-500 text-sm leading-relaxed">6 维评分 + 逐题点评 + 改进建议，历史曲线追踪每一次进步，看见自己的成长。</p>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- ===== 报告示例 ===== -->
-  <section class="py-20 bg-white">
+  <!-- ===== 核心功能 ===== -->
+  <section id="features" class="py-24 section-alt">
     <div class="max-w-6xl mx-auto px-6">
-      <div class="grid md:grid-cols-2 gap-12 items-center">
-        <!-- 左侧报告截图模拟 -->
-        <div class="bg-gradient-to-br from-indigo/5 to-purple-100/30 rounded-3xl p-8 shadow-soft">
-          <div class="bg-white rounded-2xl p-6 shadow-soft">
-            <div class="flex items-center justify-between mb-5">
-              <div>
-                <div class="text-xs text-gray-400">综合得分</div>
-                <div class="text-4xl font-bold gradient-text">78.5</div>
-                <div class="text-sm text-brandgreen font-medium">中级水平</div>
+      <div class="text-center mb-14">
+        <p class="reveal text-sm font-semibold text-indigo tracking-widest mb-3">FEATURES</p>
+        <h2 class="reveal text-4xl font-bold mb-4" style="--d:.08s">为什么选择 AI面镜</h2>
+        <p class="reveal text-gray-500" style="--d:.16s">不只是练习，更是一套完整的能力提升闭环</p>
+      </div>
+      <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div class="reveal bg-white rounded-2xl p-7 shadow-card card-hover" style="--d:0s">
+          <div class="w-12 h-12 rounded-xl bg-indigo/10 flex items-center justify-center text-xl mb-5">🎭</div>
+          <h3 class="text-lg font-bold mb-2.5">真实人设面试官</h3>
+          <p class="text-gray-500 text-sm leading-relaxed">专业、严谨、不轻易表态。答得含糊会被追问，有矛盾会被当场指出。</p>
+        </div>
+        <div class="reveal bg-white rounded-2xl p-7 shadow-card card-hover" style="--d:.08s">
+          <div class="w-12 h-12 rounded-xl bg-indigo/10 flex items-center justify-center text-xl mb-5">🎙️</div>
+          <h3 class="text-lg font-bold mb-2.5">语音视频实战</h3>
+          <p class="text-gray-500 text-sm leading-relaxed">拟人语音提问，支持视频作答与虚拟背景，全程录像可复盘回看。</p>
+        </div>
+        <div class="reveal bg-white rounded-2xl p-7 shadow-card card-hover" style="--d:.16s">
+          <div class="w-12 h-12 rounded-xl bg-brandgreen/10 flex items-center justify-center text-xl mb-5">📊</div>
+          <h3 class="text-lg font-bold mb-2.5">6 维专业评分</h3>
+          <p class="text-gray-500 text-sm leading-relaxed">按真实职级标尺打分，逐题给出亮点与改进点，知道差距具体在哪。</p>
+        </div>
+        <div class="reveal bg-white rounded-2xl p-7 shadow-card card-hover" style="--d:.24s">
+          <div class="w-12 h-12 rounded-xl bg-brandorange/10 flex items-center justify-center text-xl mb-5">📈</div>
+          <h3 class="text-lg font-bold mb-2.5">成长可视化</h3>
+          <p class="text-gray-500 text-sm leading-relaxed">历史曲线追踪每次进步，维度对比一目了然，练习方向不再凭感觉。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 报告展示 ===== -->
+  <section id="report" class="py-24">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="grid md:grid-cols-2 gap-14 items-center">
+        <!-- 左侧动态报告卡 -->
+        <div class="reveal" id="reportDemo">
+          <div class="bg-gradient-to-br from-indigo/5 to-purple-100/30 rounded-3xl p-8">
+            <div class="bg-white rounded-2xl p-6 shadow-card">
+              <div class="flex items-center justify-between mb-6">
+                <div>
+                  <div class="text-xs text-gray-400 mb-1">综合得分</div>
+                  <div class="text-4xl font-bold gradient-text">78.5</div>
+                  <div class="text-sm text-brandgreen font-medium mt-1">中级水平</div>
+                </div>
+                <span class="bg-indigo/10 text-indigo text-xs font-medium px-3 py-1.5 rounded-full">业务二面 · Leader面</span>
               </div>
-              <!-- 雷达图占位 -->
-              <div class="w-28 h-28 rounded-full border-4 border-indigo/20 flex items-center justify-center relative">
-                <div class="w-20 h-20 rounded-full border-4 border-indigo/40"></div>
-                <span class="absolute text-xs text-gray-400">雷达图</span>
+              <div class="space-y-3.5">
+                <div>
+                  <div class="flex justify-between text-xs mb-1.5"><span class="text-gray-500">岗位匹配度</span><span class="font-semibold">82</span></div>
+                  <div class="h-2 bg-gray-100 rounded-full"><div class="bar-fill h-2 rounded-full bg-brandgreen" style="--w:82%"></div></div>
+                </div>
+                <div>
+                  <div class="flex justify-between text-xs mb-1.5"><span class="text-gray-500">逻辑清晰度</span><span class="font-semibold">75</span></div>
+                  <div class="h-2 bg-gray-100 rounded-full"><div class="bar-fill h-2 rounded-full bg-indigo" style="--w:75%"></div></div>
+                </div>
+                <div>
+                  <div class="flex justify-between text-xs mb-1.5"><span class="text-gray-500">专业深度</span><span class="font-semibold">71</span></div>
+                  <div class="h-2 bg-gray-100 rounded-full"><div class="bar-fill h-2 rounded-full bg-indigo" style="--w:71%"></div></div>
+                </div>
+                <div>
+                  <div class="flex justify-between text-xs mb-1.5"><span class="text-gray-500">价值表达</span><span class="font-semibold">65</span></div>
+                  <div class="h-2 bg-gray-100 rounded-full"><div class="bar-fill h-2 rounded-full bg-brandorange" style="--w:65%"></div></div>
+                </div>
               </div>
-            </div>
-            <!-- 维度条 -->
-            <div class="space-y-2.5">
-              <div>
-                <div class="flex justify-between text-xs mb-1"><span class="text-gray-500">岗位匹配度</span><span class="font-semibold">82</span></div>
-                <div class="h-2 bg-gray-100 rounded-full"><div class="h-2 rounded-full bg-brandgreen" style="width:82%"></div></div>
-              </div>
-              <div>
-                <div class="flex justify-between text-xs mb-1"><span class="text-gray-500">逻辑清晰度</span><span class="font-semibold">75</span></div>
-                <div class="h-2 bg-gray-100 rounded-full"><div class="h-2 rounded-full bg-indigo" style="width:75%"></div></div>
-              </div>
-              <div>
-                <div class="flex justify-between text-xs mb-1"><span class="text-gray-500">价值表达</span><span class="font-semibold">65</span></div>
-                <div class="h-2 bg-gray-100 rounded-full"><div class="h-2 rounded-full bg-brandorange" style="width:65%"></div></div>
+              <div class="mt-5 bg-indigo/5 rounded-xl p-3.5 text-xs text-gray-600 leading-relaxed">
+                💡 「提升 20%」缺少验证口径——下次先讲评测集规模，再讲线上对比结论。
               </div>
             </div>
           </div>
         </div>
         <!-- 右侧文案 -->
         <div>
-          <h2 class="text-3xl font-bold mb-6">不只是分数，<br />是一份「可执行的成长报告」</h2>
+          <p class="reveal text-sm font-semibold text-indigo tracking-widest mb-3">REPORT</p>
+          <h2 class="reveal text-4xl font-bold mb-6 leading-snug" style="--d:.08s">不只是分数，<br />是一份「可执行的成长报告」</h2>
           <ul class="space-y-4">
-            <li class="flex items-start gap-3">
-              <span class="text-brandgreen text-xl">✓</span>
-              <span class="text-gray-600">综合评级一目了然，对标真实水平</span>
-            </li>
-            <li class="flex items-start gap-3">
-              <span class="text-brandgreen text-xl">✓</span>
-              <span class="text-gray-600">逐题点评 + 优化示例，知道怎么改</span>
-            </li>
-            <li class="flex items-start gap-3">
-              <span class="text-brandgreen text-xl">✓</span>
-              <span class="text-gray-600">你的回答 vs 高分回答，差距可视化</span>
-            </li>
-            <li class="flex items-start gap-3">
-              <span class="text-brandgreen text-xl">✓</span>
-              <span class="text-gray-600">一键导出 PDF，随时分享给导师</span>
-            </li>
+            <li class="reveal flex items-start gap-3" style="--d:.12s"><span class="w-6 h-6 rounded-full bg-brandgreen/10 text-brandgreen text-sm flex items-center justify-center flex-shrink-0 mt-0.5">✓</span><span class="text-gray-600">按真实职级标尺打分，对标你的实际水平</span></li>
+            <li class="reveal flex items-start gap-3" style="--d:.2s"><span class="w-6 h-6 rounded-full bg-brandgreen/10 text-brandgreen text-sm flex items-center justify-center flex-shrink-0 mt-0.5">✓</span><span class="text-gray-600">逐题点评 + 优化示例，知道每一题怎么改</span></li>
+            <li class="reveal flex items-start gap-3" style="--d:.28s"><span class="w-6 h-6 rounded-full bg-brandgreen/10 text-brandgreen text-sm flex items-center justify-center flex-shrink-0 mt-0.5">✓</span><span class="text-gray-600">面试录像随时回看，支持倍速复盘</span></li>
+            <li class="reveal flex items-start gap-3" style="--d:.36s"><span class="w-6 h-6 rounded-full bg-brandgreen/10 text-brandgreen text-sm flex items-center justify-center flex-shrink-0 mt-0.5">✓</span><span class="text-gray-600">历史成长曲线，每一次练习都有迹可循</span></li>
           </ul>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===== 岗位覆盖 ===== -->
-  <section id="jobs" class="py-20">
-    <div class="max-w-6xl mx-auto px-6 text-center">
-      <h2 class="text-3xl font-bold mb-3">专为 AI 行业岗位深度定制</h2>
-      <p class="text-gray-500 mb-10">覆盖初级 → 专家 · 行为面 / 技术面 / 压力面</p>
-      <div class="flex flex-wrap justify-center gap-3 max-w-3xl mx-auto">
-        <span class="bg-indigo/10 text-indigo px-5 py-2.5 rounded-full font-medium hover:bg-indigo hover:text-white transition cursor-pointer">AI产品经理</span>
-        <span class="bg-indigo/10 text-indigo px-5 py-2.5 rounded-full font-medium hover:bg-indigo hover:text-white transition cursor-pointer">AI运营</span>
-        <span class="bg-indigo/10 text-indigo px-5 py-2.5 rounded-full font-medium hover:bg-indigo hover:text-white transition cursor-pointer">Agent开发</span>
-        <span class="bg-indigo/10 text-indigo px-5 py-2.5 rounded-full font-medium hover:bg-indigo hover:text-white transition cursor-pointer">算法工程师</span>
-        <span class="bg-indigo/10 text-indigo px-5 py-2.5 rounded-full font-medium hover:bg-indigo hover:text-white transition cursor-pointer">前端开发</span>
-        <span class="bg-indigo/10 text-indigo px-5 py-2.5 rounded-full font-medium hover:bg-indigo hover:text-white transition cursor-pointer">后端开发</span>
-        <span class="bg-indigo/10 text-indigo px-5 py-2.5 rounded-full font-medium hover:bg-indigo hover:text-white transition cursor-pointer">测试开发</span>
-        <span class="bg-indigo/10 text-indigo px-5 py-2.5 rounded-full font-medium hover:bg-indigo hover:text-white transition cursor-pointer">NLP / CV / 多模态</span>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===== 使用流程 4 步 ===== -->
-  <section class="py-20 bg-white">
-    <div class="max-w-6xl mx-auto px-6">
-      <div class="text-center mb-14">
-        <h2 class="text-3xl font-bold mb-3">四步开启你的模拟面试</h2>
-      </div>
-      <div class="grid md:grid-cols-4 gap-6 relative">
-        <div class="text-center">
-          <div class="w-14 h-14 rounded-full gradient-btn text-white text-xl font-bold flex items-center justify-center mx-auto mb-4">1</div>
-          <h3 class="font-bold mb-2">配置面试</h3>
-          <p class="text-sm text-gray-500">选择岗位、职级、类型</p>
-        </div>
-        <div class="text-center">
-          <div class="w-14 h-14 rounded-full gradient-btn text-white text-xl font-bold flex items-center justify-center mx-auto mb-4">2</div>
-          <h3 class="font-bold mb-2">AI 对话</h3>
-          <p class="text-sm text-gray-500">语音作答，智能追问</p>
-        </div>
-        <div class="text-center">
-          <div class="w-14 h-14 rounded-full gradient-btn text-white text-xl font-bold flex items-center justify-center mx-auto mb-4">3</div>
-          <h3 class="font-bold mb-2">实时评分</h3>
-          <p class="text-sm text-gray-500">6 维度智能分析</p>
-        </div>
-        <div class="text-center">
-          <div class="w-14 h-14 rounded-full gradient-btn text-white text-xl font-bold flex items-center justify-center mx-auto mb-4">4</div>
-          <h3 class="font-bold mb-2">查看报告</h3>
-          <p class="text-sm text-gray-500">改进建议 + 练习计划</p>
+          <button onclick="location.href='报告页.html?sample=1'" class="reveal btn-arrow mt-8 text-indigo font-medium hover:underline" style="--d:.44s">查看完整示例报告 <span class="arr">→</span></button>
         </div>
       </div>
     </div>
   </section>
 
   <!-- ===== 定价 ===== -->
-  <section id="pricing" class="py-20">
+  <section id="pricing" class="py-24 section-alt">
     <div class="max-w-6xl mx-auto px-6">
       <div class="text-center mb-14">
-        <h2 class="text-3xl font-bold mb-3">选择适合你的方案</h2>
-        <p class="text-gray-500">从免费体验开始，随时升级</p>
+        <p class="reveal text-sm font-semibold text-indigo tracking-widest mb-3">PRICING</p>
+        <h2 class="reveal text-4xl font-bold mb-4" style="--d:.08s">选择适合你的方案</h2>
+        <p class="reveal text-gray-500" style="--d:.16s">从免费体验开始，随时升级</p>
       </div>
       <div class="grid md:grid-cols-3 gap-6 items-stretch">
-        <!-- 免费版 -->
-        <div class="bg-white rounded-2xl p-8 shadow-soft card-hover flex flex-col">
+        <div class="reveal bg-white rounded-2xl p-8 shadow-card card-hover flex flex-col" style="--d:0s">
           <h3 class="text-lg font-bold mb-2">免费版</h3>
           <div class="mb-6"><span class="text-4xl font-bold">¥0</span></div>
           <ul class="space-y-3 text-sm text-gray-600 mb-8 flex-1">
-            <li class="flex gap-2"><span class="text-gray-400">✓</span> 每天 1 次完整面试</li>
+            <li class="flex gap-2"><span class="text-gray-400">✓</span> 每天 1 场完整面试</li>
             <li class="flex gap-2"><span class="text-gray-400">✓</span> 完整评分报告</li>
             <li class="flex gap-2"><span class="text-gray-400">✓</span> 保存最近 7 天记录</li>
             <li class="flex gap-2 text-gray-300"><span>✕</span> 高分回答对比</li>
@@ -330,8 +372,7 @@
           </ul>
           <button class="w-full py-3 rounded-xl border-2 border-gray-200 font-medium hover:border-indigo hover:text-indigo transition">开始使用</button>
         </div>
-        <!-- 年度会员(高亮) -->
-        <div class="bg-white rounded-2xl p-8 shadow-softlg border-2 border-indigo relative flex flex-col scale-105">
+        <div class="reveal bg-white rounded-2xl p-8 shadow-softlg border-2 border-indigo relative flex flex-col lg:scale-105" style="--d:.1s">
           <div class="absolute -top-3 left-1/2 -translate-x-1/2 gradient-btn text-white text-xs font-medium px-4 py-1 rounded-full">🔥 最受欢迎</div>
           <h3 class="text-lg font-bold mb-2">年度会员</h3>
           <div class="mb-6"><span class="text-4xl font-bold">¥199</span><span class="text-gray-400">/年</span><div class="text-xs text-brandgreen mt-1">约 ¥16.6/月</div></div>
@@ -344,8 +385,7 @@
           </ul>
           <button onclick="location.href='会员.html'" class="w-full py-3 rounded-xl gradient-btn text-white font-medium">立即升级</button>
         </div>
-        <!-- 月度会员 -->
-        <div class="bg-white rounded-2xl p-8 shadow-soft card-hover flex flex-col">
+        <div class="reveal bg-white rounded-2xl p-8 shadow-card card-hover flex flex-col" style="--d:.2s">
           <h3 class="text-lg font-bold mb-2">月度会员</h3>
           <div class="mb-6"><span class="text-4xl font-bold">¥39</span><span class="text-gray-400">/月</span></div>
           <ul class="space-y-3 text-sm text-gray-600 mb-8 flex-1">
@@ -363,19 +403,20 @@
   </section>
 
   <!-- ===== 底部 CTA ===== -->
-  <section class="py-20">
+  <section class="py-24">
     <div class="max-w-5xl mx-auto px-6">
-      <div class="gradient-btn rounded-3xl p-14 text-center text-white relative overflow-hidden">
-        <h2 class="text-3xl font-bold mb-6 relative z-10">准备好照见真实的自己了吗？</h2>
-        <button class="bg-white text-indigo font-bold px-8 py-4 rounded-xl hover:scale-105 transition relative z-10">🎙️ 立即免费开始</button>
-        <div class="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20"></div>
+      <div class="reveal gradient-btn rounded-3xl p-14 text-center text-white relative overflow-hidden">
+        <h2 class="text-3xl font-bold mb-3 relative z-10">准备好照见真实的自己了吗？</h2>
+        <p class="text-white/80 text-sm mb-8 relative z-10">无需注册即可体验 · 每天 1 场免费</p>
+        <button class="btn-arrow bg-white text-indigo font-bold px-8 py-4 rounded-xl hover:scale-105 transition relative z-10">🎙️ 立即免费开始 <span class="arr">→</span></button>
+        <div class="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20 float-slow"></div>
         <div class="absolute bottom-0 left-0 w-48 h-48 bg-white/10 rounded-full -ml-16 -mb-16"></div>
       </div>
     </div>
   </section>
 
   <!-- ===== Footer ===== -->
-  <footer class="bg-white border-t border-gray-100 py-10">
+  <footer class="border-t border-gray-100 py-10">
     <div class="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
       <div class="flex items-center gap-2">
         <div class="w-8 h-8 rounded-lg gradient-btn flex items-center justify-center text-white">🪞</div>
@@ -387,34 +428,56 @@
         <a href="隐私政策.html" class="hover:text-indigo transition">隐私政策</a>
         <a href="联系.html" class="hover:text-indigo transition">联系我们</a>
       </div>
-      <div class="text-sm text-gray-400">© 2025 AI面镜 · 数据安全 · 隐私保护</div>
+      <div class="text-sm text-gray-400">© 2026 AI面镜 · 数据安全 · 隐私保护</div>
     </div>
   </footer>
 
-    <!-- ===== 交互脚本 ===== -->
+  <!-- ===== 交互脚本 ===== -->
   <script>
-    // ===== 没有单独 onclick 的"开始/体验"类按钮，默认跳配置页 =====
+    // 无 onclick 的"开始/体验"类按钮默认跳转
     document.querySelectorAll('button').forEach(btn => {
-      // 跳过已经有 onclick 的按钮（避免冲突）
       if (btn.getAttribute('onclick')) return;
       const txt = btn.textContent;
       if (txt.includes('体验') || txt.includes('开始') || txt.includes('使用')) {
         btn.style.cursor = 'pointer';
-        btn.addEventListener('click', () => {
-          window.location.href = '简历上传.html';
-        });
+        btn.addEventListener('click', () => { window.location.href = '简历上传.html'; });
       }
     });
 
-    // ===== 导航栏滚动变色 =====
+    // 导航栏滚动变色
     const nav = document.getElementById('nav');
     window.addEventListener('scroll', () => {
-      if (window.scrollY > 20) {
-        nav.classList.add('nav-blur', 'shadow-sm');
-      } else {
-        nav.classList.remove('nav-blur', 'shadow-sm');
-      }
+      if (window.scrollY > 20) nav.classList.add('nav-blur', 'shadow-sm');
+      else nav.classList.remove('nav-blur', 'shadow-sm');
     });
+
+    // 跑马灯：复制一份内容实现无缝循环
+    const track = document.getElementById('marqueeTrack');
+    track.innerHTML += track.innerHTML;
+
+    // 滚动渐入
+    const io = new IntersectionObserver(entries => {
+      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in-view'); io.unobserve(e.target); } });
+    }, { threshold: 0.15 });
+    document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+    // 报告维度条填充（进入视口触发）
+    const reportDemo = document.getElementById('reportDemo');
+    const io2 = new IntersectionObserver(entries => {
+      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in-view'); io2.unobserve(e.target); } });
+    }, { threshold: 0.3 });
+    io2.observe(reportDemo);
+
+    // 数字滚动
+    function countUp(el){
+      const target = Number(el.dataset.target||0); const dur=900; const t0=performance.now();
+      function tick(t){ const p=Math.min(1,(t-t0)/dur); el.textContent=Math.round(target*(1-Math.pow(1-p,3))); if(p<1) requestAnimationFrame(tick); }
+      requestAnimationFrame(tick);
+    }
+    const io3 = new IntersectionObserver(entries => {
+      entries.forEach(e => { if (e.isIntersecting) { countUp(e.target); io3.unobserve(e.target); } });
+    }, { threshold: 0.5 });
+    document.querySelectorAll('.count').forEach(el => io3.observe(el));
   </script>
 
 </body>

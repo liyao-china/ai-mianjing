@@ -18,6 +18,10 @@
     .gradient-btn { background:linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%); transition:all .25s ease; }
     .gradient-btn:hover { transform:translateY(-2px); box-shadow:0 10px 30px rgba(99,102,241,.35); }
     .gradient-btn:disabled { opacity:.45; cursor:not-allowed; transform:none; box-shadow:none; }
+  
+    /* 页面进入动画（暖色主题统一） */
+    @keyframes pageFade { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:none} }
+    body > div, body > main { animation: pageFade .5s ease both; }
   </style>
 </head>
 <body class="font-sans antialiased">

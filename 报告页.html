@@ -7,6 +7,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="ai-client.js"></script>
   <script>
     tailwind.config = { theme: { extend: {
       colors: { indigo: { DEFAULT: '#6366F1' }, brandgreen: '#10B981', brandorange: '#F59E0B' },
@@ -21,6 +22,10 @@
     .gradient-text { background: linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .spinner { animation: spin 1s linear infinite; }
+  
+    /* 页面进入动画（暖色主题统一） */
+    @keyframes pageFade { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:none} }
+    body > div, body > main { animation: pageFade .5s ease both; }
   </style>
 </head>
 <body class="font-sans antialiased">
@@ -67,9 +72,34 @@
 
     <!-- 面试回放视频 -->
     <div id="videoSection" class="bg-white rounded-2xl shadow-soft p-6 mb-6 hidden">
-      <h2 class="text-lg font-bold mb-4 flex items-center gap-2">🎬 面试录像回放</h2>
+      <div class="flex items-center justify-between flex-wrap gap-2 mb-4">
+        <h2 class="text-lg font-bold flex items-center gap-2">🎬 面试录像回放</h2>
+        <div class="flex items-center gap-2">
+          <div id="speedBtns" class="flex items-center gap-1 bg-gray-100 rounded-lg p-1"></div>
+          <button id="deleteVideoBtn" class="text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-50 transition">🗑 删除录像</button>
+        </div>
+      </div>
       <video id="replayVideo" controls class="w-full rounded-xl bg-black" style="max-height:400px;"></video>
-      <p class="text-xs text-gray-400 mt-2">测试版回放链接可能被持有链接的人访问，请勿分享或录制敏感内容。</p>
+      <p class="text-xs text-gray-400 mt-2">录像存放在你的私人空间，仅本人登录后可回放；不需要时可随时删除，删除后报告与评分仍会保留。</p>
+    </div>
+
+    <!-- 镜头表现分析（视频面试专属） -->
+    <div id="videoAnalysisSection" class="bg-white rounded-2xl shadow-soft p-7 mb-6 hidden">
+      <h2 class="text-lg font-bold mb-1 flex items-center gap-2">🎥 镜头表现分析 <span class="bg-indigo/10 text-indigo text-xs px-2 py-0.5 rounded-full">视频面试专属</span></h2>
+      <p class="text-sm text-gray-400 mb-4">基于面试过程中的画面采样，AI 从眼神、表情、仪态、形象四个方面分析你的镜头表现</p>
+      <div id="videoAnalysisLoading" class="hidden text-sm text-indigo py-4 text-center">🤖 AI 正在分析你的镜头表现，请稍候...</div>
+      <div id="videoAnalysisError" class="hidden text-sm text-brandorange py-2"></div>
+      <div id="videoAnalysisBody" class="hidden">
+        <div class="flex items-center gap-4 mb-5">
+          <div class="text-4xl font-bold gradient-text" id="vaScore">--</div>
+          <p class="flex-1 text-sm text-gray-600 leading-relaxed" id="vaSummary"></p>
+        </div>
+        <div class="grid md:grid-cols-2 gap-4 mb-5" id="vaAspects"></div>
+        <div class="bg-indigo/5 rounded-xl p-4">
+          <div class="text-xs font-semibold text-indigo mb-2">📌 镜头表现优化建议</div>
+          <ul class="space-y-1.5" id="vaSuggestions"></ul>
+        </div>
+      </div>
     </div>
 
     <div class="bg-white rounded-2xl shadow-soft p-7 mb-6">
@@ -105,11 +135,73 @@
     const SUPABASE_URL = "https://skxpfgqylfpavoiurfhr.supabase.co";
     const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNreHBmZ3F5bGZwYXZvaXVyZmhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0NjE5NTYsImV4cCI6MjA5NjAzNzk1Nn0._UcR6vWOppvwcqYaHFqIlKJrADRaRZDOpBDLIdPXncY";
     const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    /* ============ AI（填你的Key）============ */
-    const API_KEY = "sk-ebd50b34fb01401da5d5e02caddfa24e";
-    const MODEL = "qwen3.7-plus";
-    const API_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
-    /* ================================== */
+    /* ============ AI 调用统一走 AIProxy（ai-client.js），前端无模型密钥 ============ */
+    const VIDEO_BUCKET = "interview-videos";
+    // ⭐ 镜头分析功能开关：暂时封存，规划为会员专属功能；上线时与面试页的 ENABLE_VIDEO_ANALYSIS 一起改为 true
+    const ENABLE_VIDEO_ANALYSIS = false;
+
+    // 私有桶视频：存储的是路径，回放时签发1小时有效的签名链接；旧记录的 http 链接直接使用
+    let currentVideo = { ref:null, recordId:null };
+    async function showReplayVideo(value, opts={}){
+      if(!value) return;
+      currentVideo = { ref:value, recordId:opts.recordId||null };
+      let src = value;
+      if(!/^https?:\/\//i.test(value)){
+        try{
+          const { data, error } = await sb.storage.from(VIDEO_BUCKET).createSignedUrl(value, 3600);
+          if(error || !data?.signedUrl){ console.warn('签名链接生成失败', error); return; }
+          src = data.signedUrl;
+        }catch(e){ console.warn('签名链接异常', e); return; }
+      }
+      document.getElementById('videoSection').classList.remove('hidden');
+      document.getElementById('replayVideo').src = src;
+    }
+
+    /* ===== 倍速播放 ===== */
+    const SPEEDS=[0.75,1,1.25,1.5,2];
+    const speedBox=document.getElementById('speedBtns');
+    function speedBtnClass(active){ return 'text-xs px-2.5 py-1 rounded-md transition '+(active?'bg-white shadow font-medium text-gray-800':'text-gray-500 hover:text-gray-800'); }
+    SPEEDS.forEach(s=>{
+      const b=document.createElement('button');
+      b.textContent=s+'x'; b.className=speedBtnClass(s===1);
+      b.addEventListener('click',()=>{
+        document.getElementById('replayVideo').playbackRate=s;
+        [...speedBox.children].forEach(x=>x.className=speedBtnClass(x===b));
+      });
+      speedBox.appendChild(b);
+    });
+
+    /* ===== 删除录像（仅删视频文件，报告与评分保留）===== */
+    document.getElementById('deleteVideoBtn').addEventListener('click', async ()=>{
+      if(!currentVideo.ref) return;
+      if(!confirm('确定删除这段面试录像吗？删除后无法恢复，面试报告和评分会保留。')) return;
+      const btn=document.getElementById('deleteVideoBtn');
+      btn.disabled=true; btn.textContent='删除中…';
+      try{
+        // 1. 删除存储中的视频文件（旧公开链接也能解析出路径）
+        let path=currentVideo.ref;
+        if(/^https?:\/\//i.test(path)){
+          const m=path.match(/\/interview-videos\/(.+?)(\?|$)/);
+          path=m?decodeURIComponent(m[1]):null;
+        }
+        if(path){ const { error }=await sb.storage.from(VIDEO_BUCKET).remove([path]); if(error) console.warn('存储删除失败', error); }
+        // 2. 清除记录里的视频引用
+        if(currentVideo.recordId){
+          await sb.from('interview_records').update({ video_url:null }).eq('id', currentVideo.recordId);
+        } else {
+          const h=JSON.parse(localStorage.getItem('interviewHistory')||'[]');
+          let changed=false;
+          h.forEach(item=>{ if(item.video_url===currentVideo.ref){ item.video_url=null; changed=true; } });
+          if(changed) localStorage.setItem('interviewHistory', JSON.stringify(h));
+          localStorage.removeItem('videoPath'); localStorage.removeItem('videoUrl');
+        }
+        // 3. 收起回放区域
+        const v=document.getElementById('replayVideo'); v.pause(); v.removeAttribute('src'); v.load();
+        document.getElementById('videoSection').classList.add('hidden');
+        currentVideo={ ref:null, recordId:null };
+      }catch(e){ alert('删除失败：'+(e.message||'请稍后再试')); }
+      btn.disabled=false; btn.textContent='🗑 删除录像';
+    });
 
     const DIMENSIONS = [
       { key:'jobMatch', name:'岗位匹配度', weight:30, color:'#10B981' },
@@ -133,7 +225,18 @@
       questions:[
         {score:84,good:['项目目标和结果表达清楚'],bad:['缺少项目规模和个人贡献占比']},
         {score:81,good:['能够结合离线与线上指标'],bad:['可进一步说明指标异常时的决策过程']}
-      ]
+      ],
+      videoAnalysis:{
+        score:79,
+        summary:'整体镜头表现自然，眼神与镜头交流较稳定，回答关键问题时有低头看稿倾向，可适当增加表情变化。',
+        aspects:[
+          {name:'眼神交流',score:78,comment:'多数时间能注视镜头，思考时视线偏移较频繁'},
+          {name:'面部表情',score:75,comment:'表情整体平稳，建议在表达亮点时增加自信微笑'},
+          {name:'坐姿仪态',score:84,comment:'坐姿端正，肩部放松，几乎没有小动作'},
+          {name:'形象与环境',score:80,comment:'着装得体，背景整洁，光线略暗可补一盏面光'}
+        ],
+        suggestions:['回答时将视线锚定在摄像头而不是屏幕画面上','在陈述成果时配合适度的表情和手势增强感染力','调整光源位置，让面部光线更均匀']
+      }
     };
 
     const viewHistoryRaw = localStorage.getItem('viewHistoryReport');
@@ -152,25 +255,18 @@
         qaRecords = hist.qaRecords || hist.qa_records || [];
         document.getElementById('reportMeta').textContent = `${jobName} · ${levelName} · ${hist.typeList||'综合面试'} · ${hist.date||''}`;
         renderReport(hist.report);
-        // 历史回放视频
-        if(hist.video_url){
-          document.getElementById('videoSection').classList.remove('hidden');
-          document.getElementById('replayVideo').src = hist.video_url;
-        }
+        // 历史回放视频（新记录为私有路径，旧记录为公开链接，均兼容）；云端记录带 id 以支持删除
+        showReplayVideo(hist.video_url, { recordId: hist.id || null });
       } catch(e){ showError('历史报告读取失败：'+e.message); }
     } else {
       try { qaRecords = JSON.parse(localStorage.getItem('qaRecords')) || []; } catch(e){}
       try { meta = JSON.parse(localStorage.getItem('interviewMeta')) || {}; } catch(e){}
       jobName = meta.jobName || 'AI产品经理';
       levelName = meta.levelName || '中级';
-      document.getElementById('reportMeta').textContent = `${jobName} · ${levelName} · ${meta.typeList||'综合面试'}`;
+      document.getElementById('reportMeta').textContent = [jobName, levelName, meta.roundName, meta.typeList||'综合面试'].filter(Boolean).join(' · ');
 
-      // 本次录制的视频
-      const thisVideo = localStorage.getItem('videoUrl');
-      if(thisVideo){
-        document.getElementById('videoSection').classList.remove('hidden');
-        document.getElementById('replayVideo').src = thisVideo;
-      }
+      // 本次录制的视频（私有桶路径，签名后回放）
+      showReplayVideo(localStorage.getItem('videoPath') || localStorage.getItem('videoUrl'));
 
       const cachedReport = localStorage.getItem('currentInterviewReport');
       if(!qaRecords.length){ showError('没有找到面试记录，请先完成一场面试。'); }
@@ -200,29 +296,28 @@
     async function generateReport(attempt=0){
       let qaText='';
       qaRecords.forEach((r,i)=>{ qaText += `问题${i+1}：${r.question}\n候选人回答：${r.answer}\n\n`; });
-      const prompt = `你是一位严格、专业的面试评分专家。请根据以下面试问答记录，对候选人（应聘${jobName}，${levelName}级别）进行专业评分。
+      const prompt = `你是一位严格、专业的面试评分专家。请根据以下面试问答记录，对候选人（应聘${jobName}，${levelName}级别${meta.roundName?'，本场为'+meta.roundName:''}）进行专业评分。
 
 【面试问答记录】
 ${qaText}
 【评分维度与权重】
 1. 岗位匹配度(30%) 2. 逻辑清晰度(25%) 3. 语言流畅度(15%) 4. 专业深度(15%) 5. 自信心(10%) 6. 价值表达(5%)
+【评分标尺】请按真实校招/社招的通过标准打分，不要客气：60分=勉强及格存在明显短板，75分=达到该职级平均水平，85分以上=明显优于多数同职级候选人（必须有充分理由），95分以上原则上不给。回答空泛、缺乏具体案例和数据的，相应维度不应超过65分。
 【要求】每个维度0-100分；给3条整体改进建议；每题给得分(0-100)、1-2条亮点、1-2条改进点；严格客观。
 【必须严格按以下JSON格式返回，不要任何其他文字，不要markdown代码块】
 {"scores":{"jobMatch":数字,"logic":数字,"fluency":数字,"depth":数字,"confidence":数字,"value":数字},"overallComment":"一句话评价(50字内)","suggestions":["建议1","建议2","建议3"],"questions":[{"score":数字,"good":["亮点"],"bad":["改进"]}]}`;
 
       try {
         document.getElementById('loadingTip').textContent = 'AI 正在逐题分析，请稍候...';
-        const res = await fetch(API_URL,{ method:'POST',
-          headers:{'Authorization':'Bearer '+API_KEY,'Content-Type':'application/json'},
-          body: JSON.stringify({ model:MODEL, enable_thinking:false, messages:[
-            {role:'system',content:'你是专业的面试评分专家，只返回JSON格式的评分结果。'},
-            {role:'user',content:prompt}]})});
-        const data = await res.json();
-        if(data.error) throw new Error(JSON.stringify(data.error));
-        const content = data.choices[0].message.content || '';
+        const content = await AIProxy.chat([
+          {role:'system',content:'你是专业的面试评分专家，只返回JSON格式的评分结果。'},
+          {role:'user',content:prompt}]) || '';
         const result = parseReport(content);
+        renderReport(result); // 先展示文字报告，镜头分析随后补充
+        result.videoAnalysis = await analyzeVideoFrames(); // 无采样帧或分析失败时为 null
+        if(result.videoAnalysis) renderVideoAnalysis(result.videoAnalysis);
         localStorage.setItem('currentInterviewReport', JSON.stringify(result));
-        renderReport(result);
+        localStorage.removeItem('videoFrames');
         saveToCloud(result);
       } catch(err){
         console.error(err);
@@ -233,6 +328,78 @@ ${qaText}
           showError('报告生成暂时失败，请点击重新生成。你的面试记录已保存。');
         }
       }
+    }
+
+    /* ===== 镜头表现分析（视频面试专属）===== */
+    // （ENABLE_VIDEO_ANALYSIS 开关声明已上移到脚本顶部，避免暂时性死区错误）
+    async function analyzeVideoFrames(){
+      if(!ENABLE_VIDEO_ANALYSIS) return null;
+      let frames=[];
+      try{ frames=JSON.parse(localStorage.getItem('videoFrames')||'[]'); }catch(e){}
+      if(!Array.isArray(frames) || !frames.length) return null;
+
+      const section=document.getElementById('videoAnalysisSection');
+      const loading=document.getElementById('videoAnalysisLoading');
+      const errorEl=document.getElementById('videoAnalysisError');
+      section.classList.remove('hidden'); loading.classList.remove('hidden'); errorEl.classList.add('hidden');
+
+      const prompt=`这是候选人在一场${jobName}（${levelName}级别）模拟视频面试过程中，按时间顺序采样的${frames.length}张画面截图。请你作为专业的面试形象教练，分析候选人的镜头表现，从以下4个方面逐项评价：
+1. 眼神交流：是否注视镜头、视线是否游移
+2. 面部表情：是否自然自信、有无紧张僵硬
+3. 坐姿仪态：坐姿、肢体语言、有无多余小动作
+4. 形象与环境：着装是否得体、背景是否整洁、光线构图如何
+【要求】评价要具体、可执行，基于画面真实可见的内容，不要编造；每方面给0-100分；最后给3条镜头表现优化建议。
+【必须严格按以下JSON格式返回，不要任何其他文字】
+{"score":总分数字,"summary":"总体评价(60字内)","aspects":[{"name":"眼神交流","score":数字,"comment":"评价(30字内)"},{"name":"面部表情","score":数字,"comment":"评价"},{"name":"坐姿仪态","score":数字,"comment":"评价"},{"name":"形象与环境","score":数字,"comment":"评价"}],"suggestions":["建议1","建议2","建议3"]}`;
+
+      try{
+        const content=await AIProxy.vision([{ role:'user', content:[
+          ...frames.map(f=>({type:'image_url',image_url:{url:f}})),
+          {type:'text',text:prompt}
+        ]}]);
+        const raw=(content||'').replace(/```json/gi,'').replace(/```/g,'').trim();
+        const s=raw.indexOf('{'), e=raw.lastIndexOf('}');
+        if(s<0||e<=s) throw new Error('返回内容格式异常');
+        const va=JSON.parse(raw.slice(s,e+1));
+        if(!Number.isFinite(Number(va.score))||!Array.isArray(va.aspects)) throw new Error('分析结果不完整');
+        va.score=Math.max(0,Math.min(100,Number(va.score)));
+        va.suggestions=Array.isArray(va.suggestions)?va.suggestions.slice(0,3):[];
+        loading.classList.add('hidden');
+        return va;
+      }catch(err){
+        console.warn('镜头表现分析失败：',err);
+        loading.classList.add('hidden');
+        errorEl.classList.remove('hidden');
+        errorEl.textContent='镜头表现分析暂时失败，不影响其余报告内容。';
+        return null;
+      }
+    }
+
+    function renderVideoAnalysis(va){
+      const section=document.getElementById('videoAnalysisSection');
+      const body=document.getElementById('videoAnalysisBody');
+      section.classList.remove('hidden');
+      document.getElementById('videoAnalysisLoading').classList.add('hidden');
+      document.getElementById('videoAnalysisError').classList.add('hidden');
+      document.getElementById('vaScore').textContent=va.score;
+      document.getElementById('vaSummary').textContent=va.summary||'';
+      const aspects=document.getElementById('vaAspects'); aspects.innerHTML='';
+      (va.aspects||[]).forEach(a=>{
+        const sc=Math.max(0,Math.min(100,Number(a.score)||0));
+        const color=sc>=80?'#10B981':sc>=60?'#6366F1':'#F59E0B';
+        const el=document.createElement('div');
+        el.className='border border-gray-100 rounded-xl p-4';
+        el.innerHTML=`<div class="flex justify-between items-center mb-2"><span class="text-sm font-medium">${escapeHtml(a.name)}</span><span class="text-sm font-bold" style="color:${color}">${sc}</span></div><div class="h-2 bg-gray-100 rounded-full overflow-hidden mb-2"><div class="h-2 rounded-full" style="width:${sc}%;background:${color}"></div></div><p class="text-xs text-gray-500 leading-relaxed">${escapeHtml(a.comment||'')}</p>`;
+        aspects.appendChild(el);
+      });
+      const sg=document.getElementById('vaSuggestions'); sg.innerHTML='';
+      (va.suggestions||[]).forEach(s=>{
+        const li=document.createElement('li');
+        li.className='text-sm text-gray-600 flex gap-1.5';
+        li.innerHTML=`<span class="text-indigo">·</span>${escapeHtml(s)}`;
+        sg.appendChild(li);
+      });
+      body.classList.remove('hidden');
     }
 
     function retryReport(){
@@ -247,28 +414,27 @@ ${qaText}
       let total=0; DIMENSIONS.forEach(d=> total+=(result.scores[d.key]||0)*d.weight/100); total=total.toFixed(1);
       try {
         const { data: { user } } = await sb.auth.getUser();
+        // 私有桶：video_url 字段存储路径（如 uid/时间戳.webm），回放时签名
+        const videoRef = localStorage.getItem('videoPath') || localStorage.getItem('videoUrl') || null;
         if (user) {
-          const videoUrl = localStorage.getItem('videoUrl') || null;
           const { error } = await sb.from('interview_records').insert({
             user_id: user.id,
             job_name: jobName,
             level_name: levelName,
-            type_list: meta.typeList || '综合面试',
+            type_list: [meta.roundName, meta.typeList || '综合面试'].filter(Boolean).join(' · '),
             total_score: parseFloat(total),
             scores: result.scores,
             qa_records: qaRecords,
             report: result,
-            video_url: videoUrl
+            video_url: videoRef
           });
           if(error) console.warn('云端保存失败:', error); else console.log('✅ 已保存到云端');
-          localStorage.removeItem('videoUrl');
         } else {
-          const videoUrl = localStorage.getItem('videoUrl') || null;
           const history = JSON.parse(localStorage.getItem('interviewHistory') || '[]');
-          history.unshift({ date:new Date().toLocaleString('zh-CN'), jobName, levelName, typeList:meta.typeList||'综合面试', totalScore:parseFloat(total), scores:result.scores, qaRecords, report:result, video_url:videoUrl });
+          history.unshift({ date:new Date().toLocaleString('zh-CN'), jobName, levelName, typeList:[meta.roundName, meta.typeList||'综合面试'].filter(Boolean).join(' · '), totalScore:parseFloat(total), scores:result.scores, qaRecords, report:result, video_url:videoRef });
           localStorage.setItem('interviewHistory', JSON.stringify(history.slice(0,20)));
-          localStorage.removeItem('videoUrl');
         }
+        localStorage.removeItem('videoUrl'); localStorage.removeItem('videoPath');
       } catch(e){ console.warn('保存异常', e); }
     }
 
@@ -306,6 +472,9 @@ ${qaText}
         head.addEventListener('click',()=>{ body.classList.toggle('hidden'); icon.style.transform=body.classList.contains('hidden')?'rotate(0)':'rotate(180deg)'; });
         if(idx===0){ body.classList.remove('hidden'); icon.style.transform='rotate(180deg)'; }
       });
+
+      // 含镜头表现分析的报告（缓存/历史/示例）直接渲染该区块
+      if(ENABLE_VIDEO_ANALYSIS && result.videoAnalysis) renderVideoAnalysis(result.videoAnalysis);
 
       document.getElementById('loadingView').classList.add('hidden');
       document.getElementById('reportView').classList.remove('hidden');

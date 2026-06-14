@@ -19,6 +19,10 @@
     .gradient-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(99,102,241,0.4); }
     .gradient-text { background: linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
     .vip-card { background: linear-gradient(135deg,#1F2937 0%,#4338CA 100%); }
+  
+    /* 页面进入动画（暖色主题统一） */
+    @keyframes pageFade { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:none} }
+    body > div, body > main { animation: pageFade .5s ease both; }
   </style>
 </head>
 <body class="font-sans antialiased">
@@ -169,7 +173,14 @@
     // 统计数据（从云端历史读）
     async function loadStats(){
       try {
-        const { data, error } = await sb.from('interview_records').select('total_score').order('created_at', { ascending: false });
+        const { data: { user } } = await sb.auth.getUser();
+        if(!user){
+          document.getElementById('statCount').textContent = '0';
+          document.getElementById('statBest').textContent = '0';
+          document.getElementById('statImprove').textContent = '0';
+          return;
+        }
+        const { data, error } = await sb.from('interview_records').select('total_score').eq('user_id', user.id).order('created_at', { ascending: false });
         if(error || !data || !data.length){
           document.getElementById('statCount').textContent = '0';
           document.getElementById('statBest').textContent = '0';

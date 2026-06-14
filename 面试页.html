@@ -6,6 +6,9 @@
   <title>模拟面试中 - AI面镜</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="ai-client.js"></script>
+  <!-- MediaPipe 人像分割：用于虚拟背景 -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
   <script>
     tailwind.config = { theme: { extend: {
       colors: { indigo: { DEFAULT: '#6366F1' }, brandgreen: '#10B981', brandorange: '#F59E0B' },
@@ -31,9 +34,15 @@
     @keyframes recDot { 0%,100%{opacity:1} 50%{opacity:.3} }
     .rec-dot { animation: recDot 1.2s infinite; }
     #videoPanel { resize:both; overflow:hidden; min-width:220px; min-height:190px; max-width:46vw; max-height:62vh; }
-    #videoPanel video { width:100%; height:calc(100% - 38px); min-height:150px; }
+    #videoPanel video, #videoPanel canvas.self-view { width:100%; height:calc(100% - 38px); min-height:150px; object-fit:cover; display:block; }
+    #videoPanel video.hidden, #videoPanel canvas.self-view.hidden { display:none; }
+    #videoDragBar { cursor:move; user-select:none; touch-action:none; }
+    #videoPanel.dragging { opacity:.85; transition:none; }
     .video-active main { padding-left:300px; }
     @media (max-width: 1100px) { .video-active main { padding-left:0; } #videoPanel { max-width:72vw; max-height:45vh; top:78px; } }
+    .vp-btn { font-size:11px; padding:2px 7px; border-radius:9999px; border:1px solid #E5E7EB; color:#6B7280; transition:all .15s; white-space:nowrap; }
+    .vp-btn:hover { border-color:#6366F1; color:#6366F1; }
+    .vp-btn.active { background:#6366F1; border-color:#6366F1; color:#fff; }
   </style>
 </head>
 <body class="font-sans antialiased h-screen flex flex-col overflow-hidden">
@@ -67,14 +76,22 @@
 
   <!-- 用户视频窗：左上显示，可拖动右下角缩放 -->
   <aside id="videoPanel" class="hidden fixed top-28 left-4 bg-white rounded-2xl shadow-softlg z-30 border border-gray-200" style="width:280px;height:250px;">
-    <div class="h-[38px] px-3 flex items-center justify-between border-b border-gray-100 bg-white">
-      <span class="text-xs font-medium text-gray-600">我的视频 · 拖动右下角缩放</span>
+    <div id="videoDragBar" class="h-[38px] px-3 flex items-center justify-between border-b border-gray-100 bg-white">
+      <span class="text-xs font-medium text-gray-600">我的视频 · 按住此栏拖动</span>
       <div class="flex gap-1">
         <button data-video-size="small" class="text-xs text-gray-400 hover:text-indigo px-1">小</button>
         <button data-video-size="large" class="text-xs text-gray-400 hover:text-indigo px-1">大</button>
       </div>
     </div>
     <video id="selfVideo" autoplay muted playsinline class="object-cover rounded-b-2xl bg-gray-900"></video>
+    <canvas id="selfCanvas" class="self-view rounded-b-2xl bg-gray-900 hidden"></canvas>
+    <div class="absolute bottom-2 left-0 right-0 flex flex-wrap justify-center gap-1.5 px-2 z-10">
+      <button class="vp-btn bg-white/90 active" data-bg="none">原始</button>
+      <button class="vp-btn bg-white/90" data-bg="blur">虚化</button>
+      <button class="vp-btn bg-white/90" data-bg="gradient">渐变</button>
+      <button class="vp-btn bg-white/90" data-bg="dark">深色</button>
+      <button id="beautyBtn" class="vp-btn bg-white/90">✨ 美颜</button>
+    </div>
   </aside>
 
   <!-- 底部交互区 -->
@@ -139,10 +156,7 @@
   </div>
 
   <script>
-    /* ============ 填你的 Key ============ */
-    const API_KEY = "sk-ebd50b34fb01401da5d5e02caddfa24e";
-    const MODEL = "qwen3.7-plus";
-    const API_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
+    /* ============ AI 调用统一走 AIProxy（ai-client.js），前端无模型密钥 ============ */
     const SUPABASE_URL = "https://skxpfgqylfpavoiurfhr.supabase.co";
     const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNreHBmZ3F5bGZwYXZvaXVyZmhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0NjE5NTYsImV4cCI6MjA5NjAzNzk1Nn0._UcR6vWOppvwcqYaHFqIlKJrADRaRZDOpBDLIdPXncY";
     const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -151,6 +165,7 @@
 
     const jobNames = { 'ai-pm':'AI产品经理','ai-ops':'AI运营','agent':'Agent开发工程师','algo':'算法工程师','frontend':'前端开发','backend':'后端开发' };
     const levelNames = { intern:'实习', campus:'校招', junior:'初级', mid:'中级', senior:'高级', expert:'专家' };
+    const roundNames = { mentor:'业务一面·Mentor面', leader:'业务二面·Leader面', hr:'HR面' };
     const typeNames = { behavior:'行为面试', tech:'技术面试', project:'项目深度面', pressure:'压力面试', case:'案例设计面' };
     const inputNames = { voice:'语音回答', video:'视频回答', text:'文字回答' };
     const durMap = { quick:{sec:900,total:5}, standard:{sec:1800,total:8}, deep:{sec:3600,total:12} };
@@ -160,12 +175,15 @@
     let jdInfo=''; try { jdInfo = localStorage.getItem('jdInfo') || ''; } catch(e){}
 
     const jobName = jobNames[cfg.job] || 'AI产品经理';
-    const levelName = levelNames[cfg.level] || '中级';
+    const levelKey = levelNames[cfg.level] ? cfg.level : 'mid';
+    const levelName = levelNames[levelKey];
+    const roundKey = roundNames[cfg.round] ? cfg.round : 'mentor';
+    const roundName = roundNames[roundKey];
     const typeList = (cfg.type && cfg.type.length) ? cfg.type.map(t=>typeNames[t]).join('、') : '综合面试';
     const dur = durMap[cfg.duration] || durMap.standard;
     const TOTAL_QUESTIONS = dur.total;
 
-    document.getElementById('configLabel').textContent = `${jobName} · ${levelName} · ${typeList} · ${inputNames[cfg.input] || inputNames.video}`;
+    document.getElementById('configLabel').textContent = `${jobName} · ${levelName} · ${roundName} · ${typeList} · ${inputNames[cfg.input] || inputNames.video}`;
     document.getElementById('qTotal').textContent = TOTAL_QUESTIONS;
 
     let state = {
@@ -177,30 +195,81 @@
       videoStream:null, videoRecorder:null, videoChunks:[], recordVideo:false
     };
 
-    /* ===== 人才模型 + systemPrompt ===== */
+    /* ===== 面试官人设体系：基本人设（不可破） + 轮次人设 + 职级标尺 + 岗位考察模型 ===== */
     const talentModels = {
       'ai-pm': `① 技术理解力 ② 产品落地力 ③ 业务洞察力 ④ 数据驱动力 ⑤ 协作推动力`,
+      'ai-ops': `① 数据分析力 ② 内容与增长策略 ③ AI工具应用 ④ 用户洞察 ⑤ 跨团队执行力`,
       'agent': `① 框架掌握度 ② 架构设计力 ③ 工程实现力 ④ 问题解决力 ⑤ 技术视野`,
       'algo': `① 算法基础 ② 工程落地 ③ 业务结合 ④ 项目深度 ⑤ 技术前沿`,
+      'frontend': `① 基础与原理 ② 工程化能力 ③ 交互实现力 ④ 性能与体验 ⑤ AI协作开发`,
+      'backend': `① 系统设计 ② 工程实现 ③ 稳定性与性能 ④ 问题排查 ⑤ AI服务架构`,
       'default': `① 基础知识 ② 工程能力 ③ 问题解决 ④ 项目深度 ⑤ 学习成长`
     };
-    const talentModel = talentModels[cfg.job] || talentModels['default'];
+    // HR面不考专业细节，换用软素质考察模型
+    const talentModel = roundKey==='hr'
+      ? `① 求职动机与稳定性 ② 职业规划自洽度 ③ 协作与冲突处理 ④ 抗压与情绪管理 ⑤ 价值观与文化匹配 ⑥ 自我认知`
+      : (talentModels[cfg.job] || talentModels['default']);
 
-    const systemPrompt = `你是一位经验丰富、洞察敏锐的资深面试官，正在面试应聘【${jobName}】（${levelName}级别）的候选人。本次面试类型：${typeList}。
+    /* ---- 轮次人设：不同轮次=完全不同的面试官 ---- */
+    const roundPersonas = {
+      mentor: `【你的身份：业务一面面试官（候选人未来的直属 Mentor）】
+你是${jobName}团队里的资深一线骨干，候选人入职后要做的每件事你都亲手做过，业务执行经验极其丰富。你今天面试的目的只有一个：判断这个人交给你带，能不能快速上手、靠谱地完成具体任务。
+- 考察重点：实际动手经验的真实性与颗粒度、对${jobName}日常工作流程的理解、逻辑思维、解决具体问题的思路、学习能力与协作沟通。
+- 提问风格：紧贴简历和项目经历往下抠——"这件事你具体是怎么做的""中间卡在哪了""哪部分是你自己做的""如果让你一个人重做一遍，你会怎么排步骤"。多用真实工作中的小场景题验证上手能力。
+- 你对空谈概念和行业大词不感兴趣。候选人一旦开始谈宏观、讲格局，就立刻把他拉回到执行细节上。`,
+      leader: `【你的身份：业务二面面试官（部门 Leader）】
+你是该业务的部门负责人，带过多个团队、做过多年关键决策，战略视野开阔、阅人无数、时间宝贵。你今天面试的目的：判断这个人未来能否独立负责一块完整的业务、是否值得长期培养。
+- 考察重点：产品/技术思考的完整度与深度、数据驱动的决策能力、对行业与竞争格局的战略理解、目标感与长远规划、沟通影响力。
+- 提问风格：开放性大题 + 步步紧逼的追问——"为什么是这个判断""数据支撑是什么""资源砍半你保哪个""这个方向两年后会变成什么样"。你习惯性挑战候选人的结论，观察其在压力下的思考质量。
+- 你对背书式答案和"正确的废话"极其敏感，听到泛泛而谈会直接打断，要求对方给出自己的判断和依据。`,
+      hr: `【你的身份：HR 面面试官（资深 HRBP）】
+你看过上千名候选人，极擅长从言行细节中识别动机、稳定性和软素质，对候选人话术中的包装、矛盾和回避非常敏锐。你今天面试的目的：判断这个人的动机是否真实、稳定性如何、与团队文化是否匹配。
+- 考察重点：求职动机与职业规划的自洽性、每段经历"为什么开始/为什么结束"的选择逻辑、抗压与情绪管理、团队协作中的真实角色、价值观匹配、自我认知。
+- 提问风格：看似轻松、实则句句有考点——"为什么离开上一段""这个岗位在你的职业规划里处于什么位置""讲一次你和同事产生分歧的经历，最后怎么解决的"。你会围绕时间线矛盾和动机疑点温和但坚定地追问。
+- 你不考专业细节，但会认真验证候选人对目标岗位的了解程度和入职意愿的真实性。`
+    };
+
+    /* ---- 职级标尺：同一个问题，不同职级用不同标准要求 ---- */
+    const levelExpectations = {
+      intern: '候选人应聘实习岗：不要求完整项目经验，但要严格考察基础扎实度、学习能力、做事态度，以及课程/比赛/项目中本人真实贡献。特别警惕把团队成果包装成个人成果。',
+      campus: '候选人是校招应届生：按"可培养的正式员工"标准要求，重点验证基本功、实习与项目经历的真实深度、思维潜力。允许经验不足，不允许思路混乱、态度浮躁。',
+      junior: '候选人为1-3年初级：必须有真实落地经验。重点验证独立完成任务的能力、常用方法与工具的熟练度，分清"参与过"和"负责过"。',
+      mid: '候选人为3-5年中级：按"独立负责完整模块"标准要求。重点验证方案设计能力、踩坑与权衡的真实经验、跨团队协作案例。对讲不出细节的"我负责的"要重点质疑。',
+      senior: '候选人为5-8年高级：按"团队核心/小组负责人"标准要求。必须讲清复杂问题的系统性解法、关键决策的依据、带人或推动他人的实绩。',
+      expert: '候选人为8年以上专家：按领域专家标准严格要求。考察方法论沉淀、行业洞察、影响范围与前瞻判断。问题可以非常尖锐，泛泛而谈即视为不达标。'
+    };
+
+    const systemPrompt = `${roundPersonas[roundKey]}
+
+【面试背景】候选人应聘【${jobName}】岗位（${levelName}级别）。本场为${roundName}，类型侧重：${typeList}。
+【职级标尺】${levelExpectations[levelKey]}
 ${resumeInfo ? '【候选人简历/背景】\n' + resumeInfo + '\n' : ''}
-${jdInfo ? '【目标岗位JD】\n' + jdInfo + '\n' : ''}
+${jdInfo ? '【目标岗位JD】\n' + jdInfo + '\n重点对照JD要求逐项考察。\n' : ''}
+【开场前的综合研判（在心里完成，不要说出来）】
+正式提问前，你要先把上面四类信息——本轮人设、职级标尺、候选人简历、目标岗位JD——综合在一起，为这一场定制专属的提问主线：
+- 从简历里挑出最值得深挖的 2-3 段经历或项目，作为本场的主攻方向；
+- 找出简历与 JD 之间的匹配点和缺口，缺口正是你要重点验证的地方；
+- 按本轮人设（${roundName}）的视角决定问什么、问多深：${roundKey==='mentor'?'多问执行细节和上手能力':roundKey==='leader'?'多问思考深度、判断依据和战略视角':'多问动机、稳定性和软素质'}；
+- 始终用${levelName}级别的标准衡量回答是否达标。
+你的每一道题都应当是"针对这位候选人"的，而不是通用题库。绝不能脱离简历和 JD 空泛发问。
+【基本人设——任何情况下不可打破】
+你是一位专业、严谨、观察力强、有权威感的面试官。你代表公司在筛选人才，不是在陪聊，更不是在辅导。
+1. 全程克制中性：承接候选人的回答时，只用简短中性的话（如"嗯，我了解了""好，记下了"），或者直接追问/进入下一题。禁止评价回答的好坏。
+2. 严禁说好话：禁止出现"很好""非常棒""很优秀""回答得很全面""思路很清晰""完全正确"等一切表扬性措辞。真实的面试官不会轻易表态，你的态度应该让候选人无法判断自己答得怎么样。
+3. 听到含糊、空泛、套话式回答，必须当场追问：要具体数字、具体案例、候选人本人的具体动作和职责。
+4. 发现回答与简历、JD 或之前的回答有矛盾、漏洞，直接指出并请对方解释，语气礼貌但不退让。
+5. 候选人答错或答不上来：不纠正、不教学、不安慰。平静地说"好，这题先到这里"，再换角度验证或进入下一题。
+6. 适度施加专业压力：可以质疑候选人的结论（如"这个判断我不太认同，你再说服我一下"），观察对方的反应和思考质量。
+7. 礼貌性的客气话只允许出现在开场欢迎和结束告别，面试过程中不用。
 【人才画像评估模型（你心中的考察框架）】
 系统性评估候选人在以下维度：${talentModel}
-有意识把每个维度考察到位，没测清楚的就设计问题考察。
-【递进式提问】对一个考察点：先整体→再理解→深挖细节→挑战边界→必要时反思。某维度清楚后切换下一维度。
-【面试风格】像真实的优秀面试官一样专业、友好、有交流感。每次只问一个问题，使用自然过渡，根据上一轮回答灵活追问；避免模板化、机械化句式，也不要每轮都重复“好的”“感谢”。
-${jdInfo ? '重点对照JD要求考察。' : ''}
-【第一题规则】第一道题固定邀请候选人做1-2分钟自我介绍，并提示结合目标岗位重点展开。第一题之后再根据回答递进追问。
-【严格保密】你的评估框架和考察意图绝不能说出来。禁止说"我想考察xx""这道题评估xx"。只自然地问问题，分析默默记心里。
+有意识把每个维度考察到位，没测清楚的就设计问题去验证。
+【递进式提问】对同一考察点：先整体→再理解→深挖细节→挑战边界→必要时让对方反思。该维度问清楚后切换下一维度。每次只问一个问题，根据上一轮回答灵活追问，避免模板化句式，不要每轮重复同样的承接词。
+【严格保密】你的评估框架、考察意图、对候选人的判断绝不能说出来。禁止说"我想考察xx""这道题评估的是xx"。只自然地问问题，分析默默记在心里。
 【流程控制】每次回复最后一行单独输出状态标记（用户看不到）：
 - 继续提问：[STATUS:CONTINUE]
 - 已较全面评估，进入反问环节：先说"我的问题差不多了，你有什么想问我的吗？"再输出 [STATUS:REVERSE]
-- 反问结束：说几句结束语再输出 [STATUS:END]
+- 反问结束：用克制得体的一两句话收尾（如"好的，今天的面试就到这里，后续结果会有同事与你联系"）再输出 [STATUS:END]
 本次面试最多提问${TOTAL_QUESTIONS}道题。不要超过题目上限。
 第一道自我介绍由系统直接发出。收到候选人的自我介绍后，再开始你的递进提问。`;
 
@@ -248,6 +317,10 @@ ${jdInfo ? '重点对照JD要求考察。' : ''}
     function scrollBottom(){ const m=document.querySelector('main'); setTimeout(()=>m.scrollTop=m.scrollHeight,50); }
 
     // ===== AI 语音播报 (TTS) =====
+    // 首选：qwen3-tts-flash 拟人语音（经服务端代理）；失败时回退浏览器自带 TTS
+    const TTS_VOICE = "Cherry"; // 可选：Cherry(活泼女声)/Serena(温柔女声)/Ethan(沉稳男声)/Chelsie(知性女声)
+    let ttsAudio = null, ttsSeq = 0;
+
     let preferredVoice=null;
     function selectPreferredVoice(){
       const voices=window.speechSynthesis?.getVoices?.()||[];
@@ -257,26 +330,45 @@ ${jdInfo ? '重点对照JD要求考察。' : ''}
         || null;
     }
     if('speechSynthesis' in window){ selectPreferredVoice(); window.speechSynthesis.onvoiceschanged=selectPreferredVoice; }
-    function speak(text){
+    function speakFallback(text){
       if(!('speechSynthesis' in window)) return;
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
       u.lang = 'zh-CN'; u.rate = .94; u.pitch = 1.03; if(preferredVoice) u.voice=preferredVoice;
       window.speechSynthesis.speak(u);
     }
+    function stopSpeaking(){
+      ttsSeq++;
+      if(ttsAudio){ ttsAudio.pause(); ttsAudio.src=''; ttsAudio=null; }
+      if('speechSynthesis' in window) window.speechSynthesis.cancel();
+    }
+    async function speak(text){
+      stopSpeaking();
+      const seq = ttsSeq;
+      try{
+        const url = await AIProxy.tts(text, TTS_VOICE);
+        if(seq !== ttsSeq) return; // 期间被用户打断，丢弃这段语音
+        ttsAudio = new Audio(url);
+        ttsAudio.play().catch(()=>{ if(seq === ttsSeq) speakFallback(text); });
+      }catch(err){
+        console.warn('拟人语音合成失败，回退浏览器TTS：', err);
+        if(seq === ttsSeq) speakFallback(text);
+      }
+    }
 
     async function callAI(messages){
-      const response = await fetch(API_URL, { method:'POST',
-        headers:{ 'Authorization':'Bearer '+API_KEY, 'Content-Type':'application/json' },
-        body: JSON.stringify({ model: MODEL, enable_thinking:false, messages }) });
-      const data = await response.json();
-      if(data.error) throw new Error(JSON.stringify(data.error));
-      return data.choices[0].message.content.trim();
+      const content = await AIProxy.chat(messages);
+      return (content||'').trim();
     }
 
     let interviewPhase = 'interviewing';
     function deliverFirstQuestion(){
-      const question=`你好，欢迎参加本次${jobName}模拟面试。我们先从自我介绍开始：请你用 1-2 分钟介绍一下自己，并重点说说与这个岗位最相关的经历和优势。`;
+      const openings={
+        mentor:`你好，我是${jobName}团队的面试官，平时在一线带项目，今天这场是业务一面。先请你用 1-2 分钟做个自我介绍，重点讲讲你实际做过的、和这个岗位最相关的事情。`,
+        leader:`你好，我是这个业务的负责人，今天由我来进行你的业务二面。时间有限，请你用 1-2 分钟做个自我介绍，重点说清楚：你做过什么，以及你认为自己最有价值的地方在哪。`,
+        hr:`你好，我是公司的HR，感谢你来参加今天的面试。先请你用 1-2 分钟简单介绍一下自己，也可以聊聊你为什么对${jobName}这个岗位感兴趣。`
+      };
+      const question=openings[roundKey]||openings.mentor;
       addAIBubble(question); speak(question);
       state.lastQuestion=question;
       state.messages.push({role:'assistant',content:question+'\n[STATUS:CONTINUE]'});
@@ -366,12 +458,40 @@ ${jdInfo ? '重点对照JD要求考察。' : ''}
       state.recognition=new SR(); state.recognition.lang='zh-CN'; state.recognition.continuous=true; state.recognition.interimResults=true;
       state.recognition.onresult=(e)=>{ let final='',interim=''; for(let i=e.resultIndex;i<e.results.length;i++){ const t=e.results[i][0].transcript; if(e.results[i].isFinal) final+=t; else interim+=t; } if(final) state.transcript+=final; state.liveTranscript=state.transcript+interim; updateLiveUserBubble(state.liveTranscript); };
     }
+    /* ===== 回答录音器：浏览器语音识别不可用时（国内 Chrome 常见），用云端 ASR 转写兜底 ===== */
+    let answerRecorder=null, answerChunks=[];
+    function startAnswerRecorder(){
+      if(!('MediaRecorder' in window) || !state.mediaStream) return;
+      try{
+        const audioTracks=state.mediaStream.getAudioTracks();
+        if(!audioTracks.length) return;
+        const mime=['audio/webm;codecs=opus','audio/webm','audio/mp4'].find(t=>MediaRecorder.isTypeSupported(t))||'';
+        answerChunks=[];
+        answerRecorder=mime?new MediaRecorder(new MediaStream(audioTracks),{mimeType:mime}):new MediaRecorder(new MediaStream(audioTracks));
+        answerRecorder.ondataavailable=e=>{ if(e.data.size>0) answerChunks.push(e.data); };
+        answerRecorder.start();
+      }catch(e){ answerRecorder=null; }
+    }
+    function stopAnswerRecorder(){
+      return new Promise(resolve=>{
+        if(!answerRecorder || answerRecorder.state==='inactive'){ resolve(null); return; }
+        const rec=answerRecorder; answerRecorder=null;
+        rec.onstop=()=>resolve(new Blob(answerChunks,{type:rec.mimeType||'audio/webm'}));
+        rec.stop();
+      });
+    }
+    function blobToDataURL(blob){
+      return new Promise((resolve,reject)=>{ const r=new FileReader(); r.onload=()=>resolve(r.result); r.onerror=reject; r.readAsDataURL(blob); });
+    }
+
     function startRecording(){
       if(!state.mediaStream || !state.waitingAnswer) return;
-      window.speechSynthesis.cancel(); // 用户开始说话，停掉AI语音
-      state.isRecording=true; state.transcript=''; state.liveTranscript=''; updateLiveUserBubble('');
-      document.getElementById('liveTranscript').textContent='转录中，点击停止后会自动发送';
+      stopSpeaking(); // 用户开始说话，停掉AI语音
+      state.isRecording=true; state.transcript=''; state.liveTranscript='';
+      updateLiveUserBubble(state.recognition?'':'正在录音…说完点击停止，AI 会自动转写');
+      document.getElementById('liveTranscript').textContent=state.recognition?'转录中，点击停止后会自动发送':'录音中，停止后由 AI 转写并发送';
       if(state.recognition){ try{state.recognition.start();}catch(e){} }
+      startAnswerRecorder();
       document.getElementById('recordBtn').textContent='⏹️';
       document.getElementById('ring1').classList.remove('hidden'); document.getElementById('ring2').classList.remove('hidden');
       document.getElementById('waveCanvas').classList.remove('hidden');
@@ -379,18 +499,62 @@ ${jdInfo ? '重点对照JD要求考察。' : ''}
       if(audioCtx&&audioCtx.state==='suspended') audioCtx.resume();
       drawWave();
     }
-    function stopRecording(){
+    async function stopRecording(){
       if(!state.isRecording) return; state.isRecording=false;
       if(state.recognition){ try{state.recognition.stop();}catch(e){} }
       cancelAnimationFrame(waveAnimId);
       document.getElementById('recordBtn').textContent='🎙️';
       document.getElementById('ring1').classList.add('hidden'); document.getElementById('ring2').classList.add('hidden');
       document.getElementById('waveCanvas').classList.add('hidden');
+      const audioBlob=await stopAnswerRecorder();
       const answer=(state.liveTranscript||state.transcript).trim();
-      if(!answer){ removeLiveUserBubble(); document.getElementById('recordHint').textContent='没听清，请重新点击麦克风回答'; return; }
-      setTimeout(()=> submitAnswer(answer),300);
+      if(answer){ setTimeout(()=> submitAnswer(answer),300); return; }
+      // 浏览器没转出文字 → 云端 ASR 兜底
+      if(audioBlob && audioBlob.size>2000){
+        if(audioBlob.size>9_000_000){ removeLiveUserBubble(); document.getElementById('recordHint').textContent='单次回答录音过长，请分段回答或切换文字输入'; return; }
+        document.getElementById('recordHint').textContent='AI 正在转写你的回答，请稍候…';
+        updateLiveUserBubble('（AI 正在转写录音…）');
+        try{
+          const text=((await AIProxy.asr(await blobToDataURL(audioBlob)))||'').trim();
+          if(text){ submitAnswer(text); return; }
+        }catch(e){ console.warn('云端转写失败', e); }
+      }
+      removeLiveUserBubble();
+      document.getElementById('recordHint').textContent='没听清，请重新点击麦克风回答，或切换文字输入';
     }
     document.getElementById('recordBtn').addEventListener('click',()=>{ if(!state.waitingAnswer) return; state.isRecording?stopRecording():startRecording(); });
+
+    /* ===== 视频帧采样：供报告页 AI 分析镜头表现 ===== */
+    // ⭐ 功能开关：镜头表现分析（暂时封存，规划为会员专属功能；上线时与报告页的开关一起改为 true）
+    const ENABLE_VIDEO_ANALYSIS = false;
+    localStorage.removeItem('videoFrames'); // 清掉上一场残留
+    const capturedFrames=[]; let frameTimerIds=[];
+    function captureFrame(){
+      if(capturedFrames.length>=8) return; // 最多8帧，控制存储和分析成本
+      // 从处理管线 canvas 采样，与预览/录制画面完全一致（含虚拟背景/美颜）
+      if(!state.videoStream || !pipelineOn || !selfCanvas.width) return;
+      const c=document.createElement('canvas');
+      const w=480, h=Math.round(selfCanvas.height/selfCanvas.width*480);
+      c.width=w; c.height=h;
+      c.getContext('2d').drawImage(selfCanvas,0,0,w,h);
+      try{ capturedFrames.push(c.toDataURL('image/jpeg',0.72)); }catch(e){}
+    }
+    function startFrameSampling(){
+      if(!ENABLE_VIDEO_ANALYSIS) return;
+      frameTimerIds.push(setTimeout(captureFrame,8000)); // 开场后8秒第一帧
+      // 按面试时长均匀采样，让8帧覆盖全场（快速版约2分钟一帧，深度版约8.5分钟一帧）
+      const interval=Math.max(45000, dur.sec*1000/7);
+      frameTimerIds.push(setInterval(captureFrame,interval));
+    }
+    function stopFrameSampling(){
+      if(!ENABLE_VIDEO_ANALYSIS) return;
+      frameTimerIds.forEach(id=>{ clearTimeout(id); clearInterval(id); }); frameTimerIds=[];
+      captureFrame(); // 结束前补一帧
+      try{
+        if(capturedFrames.length) localStorage.setItem('videoFrames', JSON.stringify(capturedFrames));
+        else localStorage.removeItem('videoFrames');
+      }catch(e){ localStorage.removeItem('videoFrames'); }
+    }
 
     /* ===== 计时 ===== */
     function fmt(s){ const m=Math.floor(s/60),ss=s%60; return `${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`; }
@@ -413,12 +577,13 @@ ${jdInfo ? '重点对照JD要求考察。' : ''}
     async function finishInterview(early=false){
       if(finished) return; finished=true;
       clearInterval(state.timerId);
-      window.speechSynthesis.cancel();
+      stopSpeaking();
+      if(state.videoStream) stopFrameSampling();
       removeLiveUserBubble();
 
       // 保存问答记录
       localStorage.setItem('qaRecords', JSON.stringify(state.qaRecords));
-      localStorage.setItem('interviewMeta', JSON.stringify({ jobName, levelName, typeList }));
+      localStorage.setItem('interviewMeta', JSON.stringify({ jobName, levelName, typeList, roundName }));
       localStorage.removeItem('currentInterviewReport');
 
       const m=document.getElementById('endModal'); m.classList.remove('hidden'); m.classList.add('flex');
@@ -432,7 +597,8 @@ ${jdInfo ? '重点对照JD要求考察。' : ''}
       }
       document.getElementById('endMsg').textContent = early ? '已提前结束，AI 将根据当前已完成回答生成报告。' : 'AI 即将为你生成评分报告';
 
-      // 停掉麦克风
+      // 停掉麦克风和视频处理管线
+      pipelineOn=false;
       if(state.mediaStream) state.mediaStream.getTracks().forEach(t=>t.stop());
       if(state.videoStream) state.videoStream.getTracks().forEach(t=>t.stop());
     }
@@ -449,10 +615,9 @@ ${jdInfo ? '重点对照JD要求考察。' : ''}
             const fileName = `${user.id}/${Date.now()}.${extension}`;
             const { error } = await sb.storage.from(VIDEO_BUCKET).upload(fileName, blob, { contentType });
             if(error){ console.warn('视频上传失败', error); resolve(); return; }
-            // 拿到公开URL（public桶）
-            const { data } = sb.storage.from(VIDEO_BUCKET).getPublicUrl(fileName);
-            localStorage.setItem('videoUrl', data.publicUrl);
-            console.log('✅ 视频已上传:', data.publicUrl);
+            // 私有桶：只保存存储路径，回放时由报告页生成短期签名链接
+            localStorage.setItem('videoPath', fileName);
+            console.log('✅ 视频已上传（私有）:', fileName);
             resolve();
           } catch(e){ console.warn('上传异常', e); resolve(); }
         };
@@ -481,11 +646,13 @@ ${jdInfo ? '重点对照JD要求考察。' : ''}
         sv.srcObject = state.videoStream;
         document.getElementById('videoPanel').classList.remove('hidden');
         document.body.classList.add('video-active');
+        startVideoPipeline(); // 所见即所录：预览/录制/AI分析都走处理后的画面
         // 浏览器支持时录制视频；不支持录制时仍可进行视频回答
         if('MediaRecorder' in window){
           state.videoChunks = [];
           const mimeType=getSupportedMime();
-          state.videoRecorder = mimeType ? new MediaRecorder(state.videoStream, { mimeType }) : new MediaRecorder(state.videoStream);
+          const recordStream=getProcessedStream(); // 录制 canvas 画面（含虚拟背景/美颜）+ 原始音频
+          state.videoRecorder = mimeType ? new MediaRecorder(recordStream, { mimeType }) : new MediaRecorder(recordStream);
           state.videoRecorder.ondataavailable = e=>{ if(e.data.size>0) state.videoChunks.push(e.data); };
           state.videoRecorder.start();
           state.recordVideo = true;
@@ -499,7 +666,8 @@ ${jdInfo ? '重点对照JD要求考察。' : ''}
         state.mediaStream = state.videoStream;
         setupAnalyser(state.videoStream); setupRecognition();
         if(cfg.input==='video') document.getElementById('recordHint').textContent='视频已开启，点击麦克风开始回答，停止后自动发送';
-        localStorage.removeItem('videoUrl');
+        localStorage.removeItem('videoUrl'); localStorage.removeItem('videoPath');
+        startFrameSampling(); // 采样关键帧供报告页分析镜头表现
         closeVideoModal(); startFlow();
       } catch(err){
         errorEl.classList.remove('hidden');
@@ -511,7 +679,7 @@ ${jdInfo ? '重点对照JD要求考察。' : ''}
 
     document.getElementById('noRecordBtn').addEventListener('click', async ()=>{
       state.recordVideo = false;
-      localStorage.removeItem('videoUrl');
+      localStorage.removeItem('videoUrl'); localStorage.removeItem('videoPath');
       if(cfg.input==='video') state.inputMode='voice';
       // 仍然请求麦克风(语音答题用)
       if(state.inputMode==='voice' || state.inputMode==='video'){
@@ -538,6 +706,113 @@ ${jdInfo ? '重点对照JD要求考察。' : ''}
       if(btn.dataset.videoSize==='small'){panel.style.width='240px';panel.style.height='210px';}
       else{panel.style.width='380px';panel.style.height='330px';}
     }));
+
+    /* ===== 视频窗拖动 ===== */
+    (function(){
+      const panel=document.getElementById('videoPanel'), bar=document.getElementById('videoDragBar');
+      let dragging=false, startX=0, startY=0, origL=0, origT=0;
+      bar.addEventListener('pointerdown',e=>{
+        if(e.target.closest('button')) return;
+        dragging=true; panel.classList.add('dragging');
+        const rect=panel.getBoundingClientRect();
+        startX=e.clientX; startY=e.clientY; origL=rect.left; origT=rect.top;
+        bar.setPointerCapture(e.pointerId);
+      });
+      bar.addEventListener('pointermove',e=>{
+        if(!dragging) return;
+        let l=origL+e.clientX-startX, t=origT+e.clientY-startY;
+        l=Math.min(Math.max(l, 60-panel.offsetWidth), window.innerWidth-60);
+        t=Math.min(Math.max(t, 0), window.innerHeight-44);
+        panel.style.left=l+'px'; panel.style.top=t+'px';
+      });
+      const endDrag=()=>{ dragging=false; panel.classList.remove('dragging'); };
+      bar.addEventListener('pointerup',endDrag); bar.addEventListener('pointercancel',endDrag);
+    })();
+
+    /* ===== 视频处理管线：虚拟背景 / 美颜（所见即所录）=====
+       摄像头原始流 → 隐藏的 video 元素 → 实时绘制到 canvas（叠加虚拟背景/美颜）
+       预览、云端录制、AI 镜头分析采样全部读取这个 canvas，三者画面完全一致 */
+    let bgMode='none', beautyOn=false, segmenter=null, segBusy=false, pipelineOn=false;
+    const BEAUTY_FILTER='brightness(1.07) contrast(0.95) saturate(1.08)';
+    const selfVideoEl=document.getElementById('selfVideo');
+    const selfCanvas=document.getElementById('selfCanvas');
+    const selfCtx=selfCanvas.getContext('2d');
+    function ensureSegmenter(){
+      if(segmenter) return segmenter;
+      if(!window.SelfieSegmentation) return null;
+      segmenter=new SelfieSegmentation({ locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${f}` });
+      segmenter.setOptions({ modelSelection:1 });
+      segmenter.onResults(drawSegmented);
+      return segmenter;
+    }
+    function syncCanvasSize(){
+      if(selfVideoEl.videoWidth && (selfCanvas.width!==selfVideoEl.videoWidth || selfCanvas.height!==selfVideoEl.videoHeight)){
+        selfCanvas.width=selfVideoEl.videoWidth; selfCanvas.height=selfVideoEl.videoHeight;
+      }
+    }
+    function drawSegmented(results){
+      const w=selfCanvas.width, h=selfCanvas.height;
+      selfCtx.save();
+      selfCtx.clearRect(0,0,w,h);
+      selfCtx.drawImage(results.segmentationMask,0,0,w,h);
+      selfCtx.globalCompositeOperation='source-in';
+      selfCtx.filter=beautyOn?BEAUTY_FILTER:'none';
+      selfCtx.drawImage(results.image,0,0,w,h);
+      selfCtx.globalCompositeOperation='destination-over';
+      if(bgMode==='blur'){
+        selfCtx.filter='blur(14px)';
+        selfCtx.drawImage(results.image,0,0,w,h);
+      }else if(bgMode==='gradient'){
+        selfCtx.filter='none';
+        const g=selfCtx.createLinearGradient(0,0,w,h);
+        g.addColorStop(0,'#6366F1'); g.addColorStop(1,'#8B5CF6');
+        selfCtx.fillStyle=g; selfCtx.fillRect(0,0,w,h);
+      }else{
+        selfCtx.filter='none';
+        selfCtx.fillStyle='#111827'; selfCtx.fillRect(0,0,w,h);
+      }
+      selfCtx.restore();
+    }
+    function renderLoop(){
+      if(!pipelineOn) return;
+      if(selfVideoEl.readyState>=2){
+        syncCanvasSize();
+        if(bgMode==='none'){
+          selfCtx.save();
+          selfCtx.filter=beautyOn?BEAUTY_FILTER:'none';
+          selfCtx.drawImage(selfVideoEl,0,0,selfCanvas.width,selfCanvas.height);
+          selfCtx.restore();
+        }else if(segmenter && !segBusy){
+          segBusy=true;
+          segmenter.send({ image:selfVideoEl }).catch(()=>{}).finally(()=>{ segBusy=false; });
+        }
+      }
+      requestAnimationFrame(renderLoop);
+    }
+    function startVideoPipeline(){
+      if(pipelineOn) return;
+      pipelineOn=true;
+      selfCanvas.width=640; selfCanvas.height=480; // 占位尺寸，拿到视频元数据后自动校正
+      selfVideoEl.classList.add('hidden'); selfCanvas.classList.remove('hidden');
+      renderLoop();
+    }
+    function getProcessedStream(){
+      const canvasStream=selfCanvas.captureStream(25);
+      return new MediaStream([...canvasStream.getVideoTracks(), ...state.videoStream.getAudioTracks()]);
+    }
+    function setBgMode(mode,btn){
+      if(mode!=='none' && !ensureSegmenter()){
+        alert('虚拟背景组件加载失败，请检查网络后刷新重试');
+        return;
+      }
+      document.querySelectorAll('[data-bg]').forEach(b=>b.classList.toggle('active', b===btn));
+      bgMode=mode;
+    }
+    document.querySelectorAll('[data-bg]').forEach(btn=>btn.addEventListener('click',()=>setBgMode(btn.dataset.bg,btn)));
+    document.getElementById('beautyBtn').addEventListener('click',e=>{
+      beautyOn=!beautyOn;
+      e.currentTarget.classList.toggle('active',beautyOn);
+    });
 
     function mediaErrorMessage(error){
       const messages={

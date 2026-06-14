@@ -10,6 +10,7 @@
 
   <!-- PDF.js -->
   <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+  <script src="ai-client.js"></script>
   <script>
     if (window.pdfjsLib) {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
@@ -30,6 +31,10 @@
     .gradient-text { background: linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
     .upload-zone { transition: all .2s; }
     .upload-zone:hover { border-color:#6366F1 !important; background:#EEF2FF; }
+  
+    /* 页面进入动画（暖色主题统一） */
+    @keyframes pageFade { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:none} }
+    body > div, body > main { animation: pageFade .5s ease both; }
   </style>
 </head>
 <body class="font-sans antialiased">
@@ -117,11 +122,6 @@
     const uploadText = document.getElementById('uploadText');
     const uploadIcon = document.getElementById('uploadIcon');
 
-        // ⭐ 填你的 API Key（和面试页同一个）
-    const API_KEY = "sk-ebd50b34fb01401da5d5e02caddfa24e";
-    const MODEL = "qwen3.7-plus";
-    const API_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
-
     async function parsePDF(file){
       if(!file) return;
       if(file.type !== 'application/pdf'){ alert('请上传 PDF 格式文件'); return; }
@@ -192,21 +192,11 @@
 原始提取文字：
 ${rawText}`;
 
-      const response = await fetch(API_URL, {
-        method:'POST',
-        headers:{ 'Authorization':'Bearer '+API_KEY, 'Content-Type':'application/json' },
-        body: JSON.stringify({
-          model: MODEL,
-          enable_thinking: false,
-          messages: [
-            { role:'system', content:'你是一个专业的简历整理助手，擅长把乱序文字整理成结构清晰的简历。' },
-            { role:'user', content: prompt }
-          ]
-        })
-      });
-      const data = await response.json();
-      if(data.error) throw new Error(JSON.stringify(data.error));
-      return data.choices[0].message.content.trim();
+      const content = await AIProxy.chat([
+        { role:'system', content:'你是一个专业的简历整理助手，擅长把乱序文字整理成结构清晰的简历。' },
+        { role:'user', content: prompt }
+      ]);
+      return content.trim();
     }
 
     pdfInput.addEventListener('change', e => parsePDF(e.target.files[0]));
@@ -241,6 +231,9 @@ ${rawText}`;
 
       localStorage.setItem('resumeInfo', info);
       localStorage.setItem('jdInfo', jdText);
+      // 一次性交接：配置页加载时会读取并自动填入“本次目标岗位 JD”，随后立即清除
+      if (jdText) localStorage.setItem('pendingJD', jdText);
+      if (targetJob) localStorage.setItem('pendingTargetJob', targetJob);
       window.location.href = '配置页.html';
     });
   </script>

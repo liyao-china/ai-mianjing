@@ -1,0 +1,10 @@
+# 开发产物 / 与线上站点无关的本地文件
+work/
+outputs/
+**/__pycache__/
+.DS_Store
+*.log
+
+# Supabase 本地临时文件（函数源码与 setup.sql 仍会提交）
+supabase/.branches/
+supabase/.temp/
