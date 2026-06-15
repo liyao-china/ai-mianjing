@@ -7,8 +7,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="ai-client.js"></script>
-  <!-- MediaPipe 人像分割：用于虚拟背景 -->
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
+  <!-- MediaPipe 人像分割：用于虚拟背景（锁定稳定版本，避免 latest 拉到不匹配的 wasm 导致静默失败） -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1675465747/selfie_segmentation.js" crossorigin="anonymous"></script>
   <script>
     tailwind.config = { theme: { extend: {
       colors: { indigo: { DEFAULT: '#6366F1' }, brandgreen: '#10B981', brandorange: '#F59E0B' },
@@ -85,6 +85,7 @@
     </div>
     <video id="selfVideo" autoplay muted playsinline class="object-cover rounded-b-2xl bg-gray-900"></video>
     <canvas id="selfCanvas" class="self-view rounded-b-2xl bg-gray-900 hidden"></canvas>
+    <div id="vpStatus" class="hidden absolute top-[44px] left-1/2 -translate-x-1/2 bg-black/60 text-white text-[11px] px-2.5 py-1 rounded-full z-10"></div>
     <div class="absolute bottom-2 left-0 right-0 flex flex-wrap justify-center gap-1.5 px-2 z-10">
       <button class="vp-btn bg-white/90 active" data-bg="none">原始</button>
       <button class="vp-btn bg-white/90" data-bg="blur">虚化</button>
@@ -346,10 +347,12 @@ ${jdInfo ? '【目标岗位JD】\n' + jdInfo + '\n重点对照JD要求逐项考�
       stopSpeaking();
       const seq = ttsSeq;
       try{
-        const url = await AIProxy.tts(text, TTS_VOICE);
+        let url = await AIProxy.tts(text, TTS_VOICE);
         if(seq !== ttsSeq) return; // 期间被用户打断，丢弃这段语音
+        // ⭐ 阿里云返回的音频地址是 http://，HTTPS 站点会按"混合内容"拦截导致无声→必须升级为 https
+        if(typeof url==='string') url = url.replace(/^http:\/\//i, 'https://');
         ttsAudio = new Audio(url);
-        ttsAudio.play().catch(()=>{ if(seq === ttsSeq) speakFallback(text); });
+        ttsAudio.play().catch(err=>{ console.warn('拟人语音播放失败，回退浏览器TTS：', err); if(seq === ttsSeq) speakFallback(text); });
       }catch(err){
         console.warn('拟人语音合成失败，回退浏览器TTS：', err);
         if(seq === ttsSeq) speakFallback(text);
@@ -732,17 +735,21 @@ ${jdInfo ? '【目标岗位JD】\n' + jdInfo + '\n重点对照JD要求逐项考�
     /* ===== 视频处理管线：虚拟背景 / 美颜（所见即所录）=====
        摄像头原始流 → 隐藏的 video 元素 → 实时绘制到 canvas（叠加虚拟背景/美颜）
        预览、云端录制、AI 镜头分析采样全部读取这个 canvas，三者画面完全一致 */
-    let bgMode='none', beautyOn=false, segmenter=null, segBusy=false, pipelineOn=false;
-    const BEAUTY_FILTER='brightness(1.07) contrast(0.95) saturate(1.08)';
+    let bgMode='none', beautyOn=false, segmenter=null, segBusy=false, pipelineOn=false, segGotResult=false, segFailed=false;
+    // 美颜：提亮 + 柔化对比 + 轻微模糊磨皮，效果明显可见
+    const BEAUTY_FILTER='brightness(1.12) contrast(0.96) saturate(1.12) blur(0.6px)';
+    const SEG_VERSION='0.1.1675465747';
     const selfVideoEl=document.getElementById('selfVideo');
     const selfCanvas=document.getElementById('selfCanvas');
     const selfCtx=selfCanvas.getContext('2d');
     function ensureSegmenter(){
       if(segmenter) return segmenter;
-      if(!window.SelfieSegmentation) return null;
-      segmenter=new SelfieSegmentation({ locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${f}` });
-      segmenter.setOptions({ modelSelection:1 });
-      segmenter.onResults(drawSegmented);
+      if(!window.SelfieSegmentation){ segFailed=true; return null; }
+      try{
+        segmenter=new SelfieSegmentation({ locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@${SEG_VERSION}/${f}` });
+        segmenter.setOptions({ modelSelection:1 });
+        segmenter.onResults(r=>{ segGotResult=true; drawSegmented(r); });
+      }catch(e){ console.error('人像分割初始化失败', e); segFailed=true; segmenter=null; return null; }
       return segmenter;
     }
     function syncCanvasSize(){
@@ -773,18 +780,28 @@ ${jdInfo ? '【目标岗位JD】\n' + jdInfo + '\n重点对照JD要求逐项考�
       }
       selfCtx.restore();
     }
+    function drawRaw(){
+      selfCtx.save();
+      selfCtx.filter=beautyOn?BEAUTY_FILTER:'none';
+      selfCtx.drawImage(selfVideoEl,0,0,selfCanvas.width,selfCanvas.height);
+      selfCtx.restore();
+    }
     function renderLoop(){
       if(!pipelineOn) return;
       if(selfVideoEl.readyState>=2){
         syncCanvasSize();
-        if(bgMode==='none'){
-          selfCtx.save();
-          selfCtx.filter=beautyOn?BEAUTY_FILTER:'none';
-          selfCtx.drawImage(selfVideoEl,0,0,selfCanvas.width,selfCanvas.height);
-          selfCtx.restore();
-        }else if(segmenter && !segBusy){
-          segBusy=true;
-          segmenter.send({ image:selfVideoEl }).catch(()=>{}).finally(()=>{ segBusy=false; });
+        if(bgMode==='none' || segFailed){
+          // 原始模式，或分割不可用时：直接画原始帧（含美颜），保证画面流畅、美颜随时生效
+          drawRaw();
+        }else{
+          if(segmenter && !segBusy){
+            segBusy=true;
+            segmenter.send({ image:selfVideoEl })
+              .catch(e=>{ console.error('分割推理失败，回退原始画面', e); segFailed=true; })
+              .finally(()=>{ segBusy=false; });
+          }
+          // 首帧分割结果到来前，先画原始帧，避免画面冻结
+          if(!segGotResult) drawRaw();
         }
       }
       requestAnimationFrame(renderLoop);
@@ -800,10 +817,34 @@ ${jdInfo ? '【目标岗位JD】\n' + jdInfo + '\n重点对照JD要求逐项考�
       const canvasStream=selfCanvas.captureStream(25);
       return new MediaStream([...canvasStream.getVideoTracks(), ...state.videoStream.getAudioTracks()]);
     }
+    let vpStatusTimer=null;
+    function showVpStatus(text, autoHideMs){
+      const el=document.getElementById('vpStatus');
+      if(!text){ el.classList.add('hidden'); return; }
+      el.textContent=text; el.classList.remove('hidden');
+      clearTimeout(vpStatusTimer);
+      if(autoHideMs) vpStatusTimer=setTimeout(()=>el.classList.add('hidden'), autoHideMs);
+    }
     function setBgMode(mode,btn){
-      if(mode!=='none' && !ensureSegmenter()){
-        alert('虚拟背景组件加载失败，请检查网络后刷新重试');
-        return;
+      if(mode!=='none'){
+        if(!ensureSegmenter() || segFailed){
+          showVpStatus('背景组件加载失败，请检查网络后刷新', 4000);
+          // 不切换，保持当前可用状态
+          return;
+        }
+        // 还没出过分割结果 → 提示加载中，并设看门狗
+        if(!segGotResult){
+          showVpStatus('正在加载背景组件…', 0);
+          clearTimeout(vpStatusTimer);
+          const t0=Date.now();
+          const watch=setInterval(()=>{
+            if(segGotResult){ clearInterval(watch); showVpStatus('', 0); }
+            else if(segFailed){ clearInterval(watch); showVpStatus('背景组件加载失败，请刷新重试', 4000); }
+            else if(Date.now()-t0>8000){ clearInterval(watch); showVpStatus('背景组件加载较慢，请稍候或刷新', 4000); }
+          }, 400);
+        }
+      } else {
+        showVpStatus('', 0);
       }
       document.querySelectorAll('[data-bg]').forEach(b=>b.classList.toggle('active', b===btn));
       bgMode=mode;

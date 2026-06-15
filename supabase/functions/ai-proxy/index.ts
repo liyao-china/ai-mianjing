@@ -25,16 +25,17 @@ const COSTS: Record<string, number> = { chat: 1, vision: 2, tts: 1, asr: 1 };
 const DAILY_LIMIT_ANON = 35;   // 匿名（按IP）：约 1 场/天
 const DAILY_LIMIT_USER = 105;  // 登录用户：约 3 场/天
 
-const ALLOWED_ORIGINS = [
-  "https://liyao-china.github.io",
-  "http://localhost:8000",
-  "http://127.0.0.1:8000",
-  "null", // 本地 file:// 调试
-];
+const DEFAULT_ORIGIN = "https://liyao-china.github.io";
+// 允许：线上站点 + 任意端口的本地预览（localhost / 127.0.0.1）+ file:// 调试
+function isAllowedOrigin(origin: string): boolean {
+  if (!origin || origin === "null") return true;
+  if (origin === DEFAULT_ORIGIN) return true;
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+}
 
 function corsHeaders(origin: string): Record<string, string> {
   return {
-    "Access-Control-Allow-Origin": ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0],
+    "Access-Control-Allow-Origin": isAllowedOrigin(origin) ? (origin || DEFAULT_ORIGIN) : DEFAULT_ORIGIN,
     "Access-Control-Allow-Headers": "authorization, content-type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Vary": "Origin",
@@ -140,8 +141,10 @@ Deno.serve(async (req) => {
         model: TTS_MODEL,
         input: { text, voice, language_type: "Chinese" },
       });
-      const url = data.output?.audio?.url;
-      if (!url) throw new Error("TTS 未返回音频");
+      const rawUrl = data.output?.audio?.url;
+      if (!rawUrl) throw new Error("TTS 未返回音频");
+      // 阿里云返回 http:// 地址，HTTPS 前端会被混合内容策略拦截，统一升级为 https://
+      const url = String(rawUrl).replace(/^http:\/\//i, "https://");
       return json({ url }, 200, headers);
     }
 

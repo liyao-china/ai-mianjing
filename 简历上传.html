@@ -78,10 +78,16 @@
 
     <!-- 粘贴岗位JD -->
     <div class="bg-white rounded-2xl shadow-soft p-7 mb-6">
-      <h2 class="text-lg font-bold mb-1 flex items-center gap-2">🎯 粘贴目标岗位 JD <span class="bg-indigo/10 text-indigo text-xs px-2 py-0.5 rounded-full">精准提问</span></h2>
-      <p class="text-sm text-gray-400 mb-4">把目标岗位的招聘要求（JD）粘贴进来，AI 会对照岗位要求和你的简历，问出最有针对性的问题</p>
+      <div class="flex items-center justify-between mb-1 gap-2 flex-wrap">
+        <h2 class="text-lg font-bold flex items-center gap-2">🎯 目标岗位 JD <span class="bg-indigo/10 text-indigo text-xs px-2 py-0.5 rounded-full">精准提问</span></h2>
+        <label class="cursor-pointer text-sm text-indigo hover:text-indigo/80 border border-indigo/30 hover:border-indigo rounded-lg px-3 py-1.5 transition whitespace-nowrap">
+          🖼️ 上传 JD 截图解析
+          <input id="jdImageInput" type="file" accept="image/*" class="hidden" />
+        </label>
+      </div>
+      <p class="text-sm text-gray-400 mb-4">可直接粘贴文字，或上传招聘页面截图由 AI 自动识别——两种方式都行，识别结果会填进下方输入框，可再编辑</p>
       <textarea id="jdText" rows="6" placeholder="例如：&#10;岗位职责：&#10;1. 负责大模型应用产品的设计与落地&#10;2. 主导 RAG、Agent 等技术方案选型&#10;&#10;任职要求：&#10;1. 3年以上AI产品经验&#10;2. 熟悉 LangGraph 多智能体编排&#10;3. 有大模型产品0到1经验..." class="w-full border-2 border-gray-200 rounded-xl p-4 text-sm focus:border-indigo focus:outline-none resize-none"></textarea>
-      <p class="text-xs text-gray-400 mt-3">💡 没有具体 JD 也没关系，可以留空，AI 会按岗位通用要求出题</p>
+      <p id="jdStatus" class="text-xs text-gray-400 mt-3">💡 没有具体 JD 也没关系，可以留空，AI 会按岗位通用要求出题</p>
     </div>
 
     <!-- 背景问卷 -->
@@ -206,6 +212,40 @@ ${rawText}`;
       e.preventDefault();
       uploadZone.style.borderColor = '#C7D2FE'; uploadZone.style.background = '';
       if(e.dataTransfer.files[0]) parsePDF(e.dataTransfer.files[0]);
+    });
+
+    // ===== JD 截图上传解析（与配置页一致，走 AIProxy.vision）=====
+    const jdImageInput = document.getElementById('jdImageInput');
+    const jdStatus = document.getElementById('jdStatus');
+    jdImageInput.addEventListener('change', async e => {
+      const file = e.target.files[0];
+      if(!file) return;
+      if(!file.type.startsWith('image/')){ alert('请上传图片格式的 JD 截图'); jdImageInput.value=''; return; }
+      jdStatus.textContent = '🤖 AI 正在识别图片中的岗位 JD…';
+      jdStatus.className = 'text-xs text-indigo mt-3';
+      try {
+        const dataUrl = await new Promise((resolve,reject)=>{ const r=new FileReader(); r.onload=()=>resolve(r.result); r.onerror=reject; r.readAsDataURL(file); });
+        const content = await AIProxy.vision([{ role:'user', content:[
+          { type:'image_url', image_url:{ url:dataUrl } },
+          { type:'text', text:'请准确提取图片中的岗位职责、任职要求和加分项，只输出整理后的中文岗位JD，不要解释。' }
+        ]}]);
+        const text = (content||'').trim();
+        if(text){
+          const cur = document.getElementById('jdText').value.trim();
+          document.getElementById('jdText').value = cur ? (cur + '\n\n' + text) : text;
+          jdStatus.textContent = '✅ JD 截图已解析并填入，请核对后保存';
+          jdStatus.className = 'text-xs text-brandgreen mt-3';
+        } else {
+          jdStatus.textContent = '⚠️ 没能从图片识别到 JD，请换张更清晰的截图，或直接粘贴文字';
+          jdStatus.className = 'text-xs text-brandorange mt-3';
+        }
+      } catch(err){
+        console.error(err);
+        jdStatus.textContent = '⚠️ JD 图片识别失败：' + (err?.message || '请稍后重试，或直接粘贴文字');
+        jdStatus.className = 'text-xs text-brandorange mt-3';
+      } finally {
+        jdImageInput.value = '';
+      }
     });
 
     // ===== 保存 =====
