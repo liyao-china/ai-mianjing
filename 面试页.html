@@ -265,7 +265,12 @@ ${jdInfo ? '【目标岗位JD】\n' + jdInfo + '\n重点对照JD要求逐项考�
 【人才画像评估模型（你心中的考察框架）】
 系统性评估候选人在以下维度：${talentModel}
 有意识把每个维度考察到位，没测清楚的就设计问题去验证。
-【递进式提问】对同一考察点：先整体→再理解→深挖细节→挑战边界→必要时让对方反思。该维度问清楚后切换下一维度。每次只问一个问题，根据上一轮回答灵活追问，避免模板化句式，不要每轮重复同样的承接词。
+【提问格式铁律——必须严格遵守】
+1. 每次回复有且只有一个问题。绝对禁止一次抛出多个问题，禁止用"1. 2. 3."或"①②③"或"第一/第二"等任何形式把多个问题列出来。
+2. 像真人面试官一样口语化地说话，不要分点、不要写小标题、不要像在念题库。一两句话引出一个具体问题即可。
+3. 顺着候选人上一句回答自然地追问下去：他说到哪、哪里含糊或有亮点，你就追那一处。一个点没问透，就继续深挖这个点，不要急着换话题。
+4. 真实面试是"一问一答、层层深入"——先问一个点，听完回答，再决定往深里追还是换下一个点。你现在的每一轮只走其中一步。
+【递进式提问的内在节奏（你心里的章法，但每轮只输出一个问题）】对同一考察点：先问整体经历 → 再问具体怎么做的 → 再深挖关键细节/数据 → 必要时质疑或挑战。这个点问清楚了，下一轮再自然过渡到新的点。
 【严格保密】你的评估框架、考察意图、对候选人的判断绝不能说出来。禁止说"我想考察xx""这道题评估的是xx"。只自然地问问题，分析默默记在心里。
 【流程控制】每次回复最后一行单独输出状态标记（用户看不到）：
 - 继续提问：[STATUS:CONTINUE]
@@ -343,25 +348,88 @@ ${jdInfo ? '【目标岗位JD】\n' + jdInfo + '\n重点对照JD要求逐项考�
       if(ttsAudio){ ttsAudio.pause(); ttsAudio.src=''; ttsAudio=null; }
       if('speechSynthesis' in window) window.speechSynthesis.cancel();
     }
-    async function speak(text){
+    // 合成单句音频，返回可播放的 https 地址（失败返回 null）
+    async function synthSentence(s){
+      try{
+        let url = await AIProxy.tts(s, TTS_VOICE);
+        if(typeof url==='string') url = url.replace(/^http:\/\//i, 'https://'); // http 会被混合内容拦截
+        return url || null;
+      }catch(e){ console.warn('单句语音合成失败', e); return null; }
+    }
+    // 把长文本切成自然句，供"边说边出字"
+    function splitSentences(text){
+      const raw = (text||'').replace(/\s*\n+\s*/g,' ').trim();
+      const parts = raw.match(/[^。！？!?；;]*[。！？!?；;]+|[^。！？!?；;]+$/g) || [raw];
+      const out=[];
+      for(let p of parts){ p=p.trim(); if(!p) continue;
+        if(out.length && p.length<6) out[out.length-1]+=p; else out.push(p); // 过短并入上一句
+      }
+      return out.length?out:[raw];
+    }
+    // 新建一个 AI 气泡并返回其文本容器（用于逐句填充）
+    function addAIBubbleEl(){
+      const div=document.createElement('div'); div.className='flex gap-3 fade-up';
+      div.innerHTML=`<div class="w-9 h-9 rounded-full bg-indigo/10 flex items-center justify-center text-base flex-shrink-0">🤖</div><div class="max-w-[80%]"><div class="bg-indigo/5 rounded-2xl rounded-tl-sm px-5 py-3.5 text-sm text-gray-700 leading-relaxed"><span data-ai-text></span><span class="typing" data-ai-typing></span></div></div>`;
+      chatArea.appendChild(div); scrollBottom();
+      return div;
+    }
+    // 语音边说边把文字蹦出来；TTS 全失败时回退浏览器朗读 + 直接显示全文
+    async function speakAndReveal(fullText){
       stopSpeaking();
       const seq = ttsSeq;
-      try{
-        let url = await AIProxy.tts(text, TTS_VOICE);
-        if(seq !== ttsSeq) return; // 期间被用户打断，丢弃这段语音
-        // ⭐ 阿里云返回的音频地址是 http://，HTTPS 站点会按"混合内容"拦截导致无声→必须升级为 https
-        if(typeof url==='string') url = url.replace(/^http:\/\//i, 'https://');
-        ttsAudio = new Audio(url);
-        ttsAudio.play().catch(err=>{ console.warn('拟人语音播放失败，回退浏览器TTS：', err); if(seq === ttsSeq) speakFallback(text); });
-      }catch(err){
-        console.warn('拟人语音合成失败，回退浏览器TTS：', err);
-        if(seq === ttsSeq) speakFallback(text);
+      state.lastQuestion = fullText;
+      const bubble = addAIBubbleEl();
+      const textEl = bubble.querySelector('[data-ai-text]');
+      const typingEl = bubble.querySelector('[data-ai-typing]');
+      const sentences = splitSentences(fullText);
+      const showAll = ()=>{ if(textEl) textEl.textContent = fullText; if(typingEl) typingEl.remove(); };
+      let revealed='', anyAudio=false, i=0;
+      let nextUrlP = synthSentence(sentences[0]); // 预取第一句，缩短首字延迟
+      while(i < sentences.length){
+        if(seq !== ttsSeq){ showAll(); return; } // 被用户打断 → 直接显示全文
+        const url = await nextUrlP;
+        if(seq !== ttsSeq){ showAll(); return; }
+        nextUrlP = (i+1<sentences.length) ? synthSentence(sentences[i+1]) : Promise.resolve(null); // 流水线预取下一句
+        const revealThis = ()=>{ revealed += sentences[i]; if(seq===ttsSeq && textEl){ textEl.textContent=revealed; scrollBottom(); } };
+        if(url){
+          anyAudio=true;
+          await new Promise(resolve=>{
+            ttsAudio = new Audio(url);
+            let done=false; const finish=()=>{ if(!done){ done=true; resolve(); } };
+            ttsAudio.onplay = revealThis;          // 声音一响就出这句字
+            ttsAudio.onended = finish;
+            ttsAudio.onerror = ()=>{ revealThis(); finish(); };
+            ttsAudio.play().catch(()=>{ revealThis(); finish(); });
+          });
+        } else { revealThis(); }
+        i++;
       }
+      if(typingEl) typingEl.remove();
+      if(!anyAudio && seq===ttsSeq){ showAll(); speakFallback(fullText); } // 一句都没合成成功 → 浏览器朗读兜底
+      else showAll();
     }
 
     async function callAI(messages){
       const content = await AIProxy.chat(messages);
       return (content||'').trim();
+    }
+
+    /* 兜底：万一模型仍分点/一次抛多个问题，只保留第一个问题，避免机械感 */
+    function keepSingleQuestion(text){
+      if(!text) return text;
+      let t = text.trim();
+      const idxs = [t.indexOf('？'), t.indexOf('?')].filter(i=>i>=0);
+      if(idxs.length){
+        const qIdx = Math.min(...idxs);
+        const after = t.slice(qIdx+1);
+        // 第一个问号之后还有新的编号或又一个问句 → 判定为多问，裁掉后面
+        if(/[？?]/.test(after) || /(^|\n)\s*([0-9]+[.、)]|[①②③④⑤⑥⑦⑧⑨⑩]|第[一二三四五六]|另外|其次|再有)/.test(after)){
+          t = t.slice(0, qIdx+1);
+        }
+      }
+      // 去掉残留的行首编号
+      t = t.replace(/^\s*([0-9]+[.、)]|[①②③④⑤⑥⑦⑧⑨⑩])\s*/, '').trim();
+      return t;
     }
 
     let interviewPhase = 'interviewing';
@@ -372,7 +440,7 @@ ${jdInfo ? '【目标岗位JD】\n' + jdInfo + '\n重点对照JD要求逐项考�
         hr:`你好，我是公司的HR，感谢你来参加今天的面试。先请你用 1-2 分钟简单介绍一下自己，也可以聊聊你为什么对${jobName}这个岗位感兴趣。`
       };
       const question=openings[roundKey]||openings.mentor;
-      addAIBubble(question); speak(question);
+      speakAndReveal(question);
       state.lastQuestion=question;
       state.messages.push({role:'assistant',content:question+'\n[STATUS:CONTINUE]'});
       state.questionCount=1; state.waitingAnswer=true; updateDots(); setInputEnabled(true);
@@ -387,8 +455,9 @@ ${jdInfo ? '【目标岗位JD】\n' + jdInfo + '\n重点对照JD要求逐项考�
       try{
         let reply = await callAI(state.messages);
         let status='CONTINUE'; const match=reply.match(/\[STATUS:(\w+)\]/); if(match) status=match[1];
-        const question = reply.replace(/\[STATUS:\w+\]/g,'').trim();
-        removeThinking(); addAIBubble(question); speak(question); // 语音播报
+        let question = reply.replace(/\[STATUS:\w+\]/g,'').trim();
+        if(status==='CONTINUE') question = keepSingleQuestion(question); // 反问/结束语不裁剪
+        removeThinking(); speakAndReveal(question); // 语音边说边出字
         state.lastQuestion=question; state.messages.push({role:'assistant',content:reply});
         state.aiThinking=false;
         if(status==='END'){ state.waitingAnswer=false; setInputEnabled(false); document.getElementById('progressTip').textContent='面试结束'; setTimeout(()=>finishInterview(),1200); return; }
@@ -510,18 +579,18 @@ ${jdInfo ? '【目标岗位JD】\n' + jdInfo + '\n重点对照JD要求逐项考�
       document.getElementById('ring1').classList.add('hidden'); document.getElementById('ring2').classList.add('hidden');
       document.getElementById('waveCanvas').classList.add('hidden');
       const audioBlob=await stopAnswerRecorder();
-      const answer=(state.liveTranscript||state.transcript).trim();
-      if(answer){ setTimeout(()=> submitAnswer(answer),300); return; }
-      // 浏览器没转出文字 → 云端 ASR 兜底
-      if(audioBlob && audioBlob.size>2000){
-        if(audioBlob.size>9_000_000){ removeLiveUserBubble(); document.getElementById('recordHint').textContent='单次回答录音过长，请分段回答或切换文字输入'; return; }
+      const browserText=(state.liveTranscript||state.transcript).trim();
+      // ⭐ 优先用云端 qwen ASR（比浏览器自带识别准很多，尤其专业术语/中英混说）；失败再退回浏览器识别
+      if(audioBlob && audioBlob.size>2000 && audioBlob.size<=9_000_000){
         document.getElementById('recordHint').textContent='AI 正在转写你的回答，请稍候…';
-        updateLiveUserBubble('（AI 正在转写录音…）');
+        updateLiveUserBubble(browserText || '（AI 正在转写录音…）');
         try{
           const text=((await AIProxy.asr(await blobToDataURL(audioBlob)))||'').trim();
           if(text){ submitAnswer(text); return; }
-        }catch(e){ console.warn('云端转写失败', e); }
+        }catch(e){ console.warn('云端转写失败，回退浏览器识别', e); }
       }
+      if(browserText){ submitAnswer(browserText); return; } // 云端不可用时的兜底
+      if(audioBlob && audioBlob.size>9_000_000){ removeLiveUserBubble(); document.getElementById('recordHint').textContent='单次回答录音过长，请分段回答或切换文字输入'; return; }
       removeLiveUserBubble();
       document.getElementById('recordHint').textContent='没听清，请重新点击麦克风回答，或切换文字输入';
     }
@@ -581,6 +650,10 @@ ${jdInfo ? '【目标岗位JD】\n' + jdInfo + '\n重点对照JD要求逐项考�
       if(finished) return; finished=true;
       clearInterval(state.timerId);
       stopSpeaking();
+      state.waitingAnswer=false; setInputEnabled(false);
+      // ⭐ 立刻在视觉上结束录制：收起"录制中"标识 + 冻结预览画面（让用户确信已停止）
+      const badge=document.getElementById('recBadge'); badge.classList.add('hidden'); badge.classList.remove('flex');
+      pipelineOn=false; // 停止画面绘制（预览冻结=已结束）
       if(state.videoStream) stopFrameSampling();
       removeLiveUserBubble();
 
@@ -590,41 +663,47 @@ ${jdInfo ? '【目标岗位JD】\n' + jdInfo + '\n重点对照JD要求逐项考�
       localStorage.removeItem('currentInterviewReport');
 
       const m=document.getElementById('endModal'); m.classList.remove('hidden'); m.classList.add('flex');
+      const endMsg=document.getElementById('endMsg');
 
-      // 停止视频录制并上传
+      // 停止视频录制并上传（先 stop 拿到完整数据，再彻底关闭摄像头）
       if(state.recordVideo && state.videoRecorder){
-        document.getElementById('endMsg').textContent = '正在保存面试视频，请稍候...';
+        endMsg.textContent = '正在保存面试视频，请稍候…';
         document.getElementById('goReport').disabled = true;
-        await stopAndUploadVideo();
+        const res = await stopAndUploadVideo();
         document.getElementById('goReport').disabled = false;
+        if(res.status==='ok') endMsg.textContent = '✅ 面试视频已保存';
+        else if(res.status==='not-logged-in') endMsg.textContent = 'ℹ️ 未登录，本次录像未保存（登录后录像会自动存入历史回放）';
+        else endMsg.textContent = '⚠️ 视频保存失败：' + (res.message||'稍后可重试') + '（不影响评分报告）';
+        await new Promise(r=>setTimeout(r, res.status==='ok'?600:1800)); // 让用户看清提示
       }
-      document.getElementById('endMsg').textContent = early ? '已提前结束，AI 将根据当前已完成回答生成报告。' : 'AI 即将为你生成评分报告';
+      endMsg.textContent = early ? '已提前结束，AI 将根据当前已完成回答生成报告。' : 'AI 即将为你生成评分报告';
 
-      // 停掉麦克风和视频处理管线
-      pipelineOn=false;
+      // 彻底关闭麦克风和摄像头
       if(state.mediaStream) state.mediaStream.getTracks().forEach(t=>t.stop());
       if(state.videoStream) state.videoStream.getTracks().forEach(t=>t.stop());
     }
 
     async function stopAndUploadVideo(){
       return new Promise((resolve)=>{
+        if(!state.videoRecorder || state.videoRecorder.state==='inactive'){ resolve({status:'error', message:'录制器不可用'}); return; }
         state.videoRecorder.onstop = async () => {
           try {
             const contentType=state.videoRecorder.mimeType || 'video/webm';
             const blob = new Blob(state.videoChunks, { type:contentType });
+            if(!blob.size){ resolve({status:'error', message:'录制内容为空'}); return; }
             const { data:{ user } } = await sb.auth.getUser();
-            if(!user){ console.warn('未登录，视频不上传'); resolve(); return; }
+            if(!user){ console.warn('未登录，视频不上传'); resolve({status:'not-logged-in'}); return; }
             const extension=contentType.includes('mp4')?'mp4':'webm';
             const fileName = `${user.id}/${Date.now()}.${extension}`;
-            const { error } = await sb.storage.from(VIDEO_BUCKET).upload(fileName, blob, { contentType });
-            if(error){ console.warn('视频上传失败', error); resolve(); return; }
+            const { error } = await sb.storage.from(VIDEO_BUCKET).upload(fileName, blob, { contentType, upsert:false });
+            if(error){ console.warn('视频上传失败', error); resolve({status:'error', message:error.message||'上传失败'}); return; }
             // 私有桶：只保存存储路径，回放时由报告页生成短期签名链接
             localStorage.setItem('videoPath', fileName);
             console.log('✅ 视频已上传（私有）:', fileName);
-            resolve();
-          } catch(e){ console.warn('上传异常', e); resolve(); }
+            resolve({status:'ok', path:fileName});
+          } catch(e){ console.warn('上传异常', e); resolve({status:'error', message:e.message||'上传异常'}); }
         };
-        state.videoRecorder.stop();
+        try{ state.videoRecorder.stop(); }catch(e){ resolve({status:'error', message:'录制器停止失败'}); }
       });
     }
 

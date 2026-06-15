@@ -154,11 +154,14 @@ Deno.serve(async (req) => {
         return json({ error: "audio 需为 base64 Data URL" }, 400, headers);
       }
       if (audio.length > 13_000_000) return json({ error: "录音过大（限10MB）" }, 400, headers);
+      // system 文本作为识别上下文/热词，提升对面试与技术术语的准确率
+      const asrContext = String(payload?.context ?? "").slice(0, 800) ||
+        "这是一段中文求职面试的口语回答，可能中英混说，常见词汇：产品经理、运营、算法、工程师、大模型、提示词、RAG、Agent、智能体、多模态、微调、向量数据库、用户增长、数据驱动、需求分析、项目复盘、KPI、ROI、A/B测试、Python、SQL、API、ffmpeg、字节跳动、阿里、腾讯、实习、校招。";
       const data = await callDashScope(NATIVE_URL, {
         model: ASR_MODEL,
         input: {
           messages: [
-            { role: "system", content: [{ text: "" }] },
+            { role: "system", content: [{ text: asrContext }] },
             { role: "user", content: [{ audio }] },
           ],
         },

@@ -80,6 +80,7 @@
         </div>
       </div>
       <video id="replayVideo" controls class="w-full rounded-xl bg-black" style="max-height:400px;"></video>
+      <p id="videoMsg" class="hidden text-sm text-brandorange mt-2"></p>
       <p class="text-xs text-gray-400 mt-2">录像存放在你的私人空间，仅本人登录后可回放；不需要时可随时删除，删除后报告与评分仍会保留。</p>
     </div>
 
@@ -142,19 +143,37 @@
 
     // 私有桶视频：存储的是路径，回放时签发1小时有效的签名链接；旧记录的 http 链接直接使用
     let currentVideo = { ref:null, recordId:null };
+    function showVideoMsg(msg){
+      const el=document.getElementById('videoMsg');
+      if(!msg){ el.classList.add('hidden'); return; }
+      el.textContent=msg; el.classList.remove('hidden');
+    }
     async function showReplayVideo(value, opts={}){
       if(!value) return;
       currentVideo = { ref:value, recordId:opts.recordId||null };
+      const section=document.getElementById('videoSection');
+      const videoEl=document.getElementById('replayVideo');
       let src = value;
       if(!/^https?:\/\//i.test(value)){
         try{
           const { data, error } = await sb.storage.from(VIDEO_BUCKET).createSignedUrl(value, 3600);
-          if(error || !data?.signedUrl){ console.warn('签名链接生成失败', error); return; }
+          if(error || !data?.signedUrl){
+            console.warn('签名链接生成失败', error);
+            section.classList.remove('hidden'); videoEl.classList.add('hidden');
+            showVideoMsg('录像加载失败：' + (error?.message || '可能未登录本人账号，或录像已被删除') + '。请确认已登录后刷新重试。');
+            return;
+          }
           src = data.signedUrl;
-        }catch(e){ console.warn('签名链接异常', e); return; }
+        }catch(e){
+          console.warn('签名链接异常', e);
+          section.classList.remove('hidden'); videoEl.classList.add('hidden');
+          showVideoMsg('录像加载异常，请稍后刷新重试。');
+          return;
+        }
       }
-      document.getElementById('videoSection').classList.remove('hidden');
-      document.getElementById('replayVideo').src = src;
+      showVideoMsg('');
+      section.classList.remove('hidden'); videoEl.classList.remove('hidden');
+      videoEl.src = src;
     }
 
     /* ===== 倍速播放 ===== */
@@ -417,7 +436,7 @@ ${qaText}
         // 私有桶：video_url 字段存储路径（如 uid/时间戳.webm），回放时签名
         const videoRef = localStorage.getItem('videoPath') || localStorage.getItem('videoUrl') || null;
         if (user) {
-          const { error } = await sb.from('interview_records').insert({
+          const row = {
             user_id: user.id,
             job_name: jobName,
             level_name: levelName,
@@ -427,8 +446,15 @@ ${qaText}
             qa_records: qaRecords,
             report: result,
             video_url: videoRef
-          });
-          if(error) console.warn('云端保存失败:', error); else console.log('✅ 已保存到云端');
+          };
+          let { error } = await sb.from('interview_records').insert(row);
+          if(error && /video_url/i.test(error.message||'')){
+            // 兼容旧表结构：缺少 video_url 列时去掉该字段重试，至少保住报告与评分（请执行 setup.sql 补列）
+            console.warn('interview_records 缺少 video_url 列，降级保存。请在 Supabase 执行 setup.sql 补列。', error);
+            delete row.video_url;
+            ({ error } = await sb.from('interview_records').insert(row));
+          }
+          if(error) console.warn('云端保存失败:', error); else console.log('✅ 已保存到云端', videoRef?('（含录像 '+videoRef+'）'):'');
         } else {
           const history = JSON.parse(localStorage.getItem('interviewHistory') || '[]');
           history.unshift({ date:new Date().toLocaleString('zh-CN'), jobName, levelName, typeList:[meta.roundName, meta.typeList||'综合面试'].filter(Boolean).join(' · '), totalScore:parseFloat(total), scores:result.scores, qaRecords, report:result, video_url:videoRef });

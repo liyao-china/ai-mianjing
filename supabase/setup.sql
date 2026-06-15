@@ -49,6 +49,9 @@ revoke execute on function public.bump_ai_usage(text, integer) from public, anon
 revoke execute on function public.get_ai_usage(text) from public, anon, authenticated;
 
 -- ---------- 2. 面试记录表：强制用户隔离（P0-4） ----------
+-- 兼容旧表结构：确保录像引用列存在（缺列会导致带 video_url 的写入整条失败 → 历史看不到记录/录像）
+alter table public.interview_records add column if not exists video_url text;
+
 alter table public.interview_records enable row level security;
 
 drop policy if exists "own records select" on public.interview_records;
