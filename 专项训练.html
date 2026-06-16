@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>专项训练 - AI面镜</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="ai-client.js"></script>
+  <script>
+    tailwind.config = { theme: { extend: {
+      colors: { indigo: { DEFAULT: '#6366F1' }, brandgreen: '#10B981', brandorange: '#F59E0B' },
+      fontFamily: { sans: ['Inter','PingFang SC','Microsoft YaHei','sans-serif'] },
+      boxShadow: { soft:'0 4px 20px rgba(99,102,241,0.08)', softlg:'0 10px 40px rgba(99,102,241,0.15)' },
+    }}};
+  </script>
+  <style>
+    body { background: #F9FAFB; color: #111827; }
+    .gradient-btn { background: linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%); transition: all .25s ease; }
+    .gradient-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(99,102,241,0.4); }
+    .gradient-btn:disabled { opacity:.5; cursor:not-allowed; transform:none; box-shadow:none; }
+    .gradient-text { background: linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+    @keyframes pageFade { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:none} }
+    body > div { animation: pageFade .5s ease both; }
+    .tab-btn.active { background:#fff; color:#6366F1; box-shadow:0 2px 10px rgba(99,102,241,0.12); }
+    .field { width:100%; border:1px solid #E5E7EB; border-radius:.75rem; padding:.6rem .75rem; font-size:.875rem; }
+    .field:focus { outline:none; border-color:#6366F1; box-shadow:0 0 0 3px rgba(99,102,241,.12); }
+    .spin { width:18px;height:18px;border:2px solid #E5E7EB;border-top-color:#6366F1;border-radius:50%;display:inline-block;animation:rot .8s linear infinite;vertical-align:-3px; }
+    @keyframes rot { to{transform:rotate(360deg)} }
+  </style>
+</head>
+<body class="font-sans antialiased">
+
+  <nav class="bg-white border-b border-gray-100 sticky top-0 z-40">
+    <div class="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+      <a href="index.html" class="flex items-center gap-2">
+        <div class="w-9 h-9 rounded-xl gradient-btn flex items-center justify-center text-white text-lg">🪞</div>
+        <span class="text-xl font-bold">AI面镜</span>
+      </a>
+      <div class="flex items-center gap-4 text-sm">
+        <a href="历史成长.html" class="text-gray-500 hover:text-indigo">成长曲线</a>
+        <a href="专项训练.html" class="text-indigo font-medium">专项训练</a>
+        <a href="个人中心.html" class="text-gray-500 hover:text-indigo">个人中心</a>
+        <button onclick="location.href='配置页.html'" class="gradient-btn text-white font-medium px-5 py-2 rounded-lg">+ 新面试</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="max-w-4xl mx-auto px-6 py-8">
+    <div class="mb-6">
+      <h1 class="text-2xl font-bold mb-1">专项训练</h1>
+      <p class="text-sm text-gray-400">针对 HR 面和薪资谈判的高频场景，生成专属训练题与可直接说出口的话术。</p>
+    </div>
+
+    <!-- 通用背景 -->
+    <div class="bg-white rounded-2xl shadow-soft p-5 mb-6">
+      <div class="grid md:grid-cols-3 gap-4">
+        <div>
+          <label class="text-xs text-gray-500 mb-1.5 block">目标岗位 *</label>
+          <input id="job" class="field" placeholder="如：AI产品经理 / 后端开发" />
+        </div>
+        <div>
+          <label class="text-xs text-gray-500 mb-1.5 block">目标公司（选填）</label>
+          <input id="company" class="field" placeholder="如：字节跳动" />
+        </div>
+        <div>
+          <label class="text-xs text-gray-500 mb-1.5 block">求职阶段</label>
+          <select id="stage" class="field">
+            <option value="社招">社招</option>
+            <option value="校招">校招 / 应届</option>
+          </select>
+        </div>
+      </div>
+      <p class="text-xs text-gray-400 mt-3">已自动读取你最近的岗位与简历背景（如有），可修改后再生成。</p>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex gap-1 bg-gray-100 rounded-xl p-1 mb-6 max-w-md">
+      <button class="tab-btn active flex-1 py-2 rounded-lg text-sm font-medium transition" data-tab="hr">👥 HR 面专项训练</button>
+      <button class="tab-btn flex-1 py-2 rounded-lg text-sm font-medium text-gray-500 transition" data-tab="salary">💰 薪资谈判</button>
+    </div>
+
+    <!-- HR 面板 -->
+    <section id="panel-hr">
+      <div class="flex items-center justify-between mb-4">
+        <p class="text-sm text-gray-500">覆盖求职动机、稳定性 / 离职原因、薪资预期、职业规划 / offer 选择。</p>
+        <button id="hrGen" class="gradient-btn text-white text-sm font-medium px-5 py-2.5 rounded-xl">生成 HR 面训练</button>
+      </div>
+      <div id="hrResult" class="space-y-4"></div>
+      <div id="hrEmpty" class="text-center text-gray-300 py-16 text-sm">点击右上角「生成 HR 面训练」开始</div>
+    </section>
+
+    <!-- 薪资面板 -->
+    <section id="panel-salary" class="hidden">
+      <div class="bg-white rounded-2xl shadow-soft p-5 mb-4">
+        <div class="grid md:grid-cols-3 gap-4">
+          <div>
+            <label class="text-xs text-gray-500 mb-1.5 block">当前年度总包（选填）</label>
+            <input id="curPay" class="field" placeholder="如：30万 / 25K×15薪" />
+          </div>
+          <div>
+            <label class="text-xs text-gray-500 mb-1.5 block">期望（选填）</label>
+            <input id="expectPay" class="field" placeholder="如：涨幅25% / 40万左右" />
+          </div>
+          <div>
+            <label class="text-xs text-gray-500 mb-1.5 block">是否手握竞品 offer</label>
+            <select id="hasOffer" class="field">
+              <option value="无">暂无 / 不方便说</option>
+              <option value="有">有竞品 offer</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center justify-between mb-4">
+        <p class="text-sm text-gray-500">基于「让对方先出牌、算年度总包、不暴露底线」原则生成谈判方案。</p>
+        <button id="salGen" class="gradient-btn text-white text-sm font-medium px-5 py-2.5 rounded-xl">生成谈判方案</button>
+      </div>
+      <div id="salResult" class="space-y-4"></div>
+      <div id="salEmpty" class="text-center text-gray-300 py-16 text-sm">填写上方信息后点击「生成谈判方案」</div>
+    </section>
+  </div>
+
+  <script>
+    /* ===== 预填背景 ===== */
+    function readJSON(k){ try{return JSON.parse(localStorage.getItem(k)||'null');}catch(e){return null;} }
+    (function prefill(){
+      const meta=readJSON('interviewMeta'); const online=readJSON('onlineResume');
+      const job = (meta&&meta.jobName) || (online&&online.job) || localStorage.getItem('pendingTargetJob') || '';
+      if(job) document.getElementById('job').value=job;
+    })();
+    function resumeContext(){
+      const r = localStorage.getItem('resumeInfo') || '';
+      return r ? r.slice(0,1500) : '';
+    }
+    function baseInfo(){
+      return {
+        job: document.getElementById('job').value.trim(),
+        company: document.getElementById('company').value.trim(),
+        stage: document.getElementById('stage').value
+      };
+    }
+    function escapeHtml(v){ return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+    function parseJSON(content){
+      const cleaned=String(content||'').trim().replace(/```json/gi,'').replace(/```/g,'').trim();
+      const s=cleaned.indexOf('{'), e=cleaned.lastIndexOf('}');
+      if(s<0||e<=s) throw new Error('返回内容不可解析');
+      return JSON.parse(cleaned.slice(s,e+1));
+    }
+
+    /* ===== Tabs ===== */
+    document.querySelectorAll('.tab-btn').forEach(btn=>{
+      btn.addEventListener('click',()=>{
+        document.querySelectorAll('.tab-btn').forEach(b=>{b.classList.remove('active');b.classList.add('text-gray-500');});
+        btn.classList.add('active');btn.classList.remove('text-gray-500');
+        const t=btn.dataset.tab;
+        document.getElementById('panel-hr').classList.toggle('hidden',t!=='hr');
+        document.getElementById('panel-salary').classList.toggle('hidden',t!=='salary');
+      });
+    });
+
+    /* ===== HR 面专项训练 ===== */
+    document.getElementById('hrGen').addEventListener('click',async ()=>{
+      const b=baseInfo();
+      if(!b.job){ alert('请先填写目标岗位'); return; }
+      const btn=document.getElementById('hrGen'); const result=document.getElementById('hrResult'); const empty=document.getElementById('hrEmpty');
+      btn.disabled=true; const old=btn.textContent; btn.innerHTML='<span class="spin"></span> 生成中…';
+      empty.classList.add('hidden'); result.innerHTML='';
+      const prompt=`你是资深 HRBP / HR 面试官，为候选人定制「HR 面专项训练」。
+【目标岗位】${b.job}${b.company?`\n【目标公司】${b.company}`:''}
+【求职阶段】${b.stage}
+${resumeContext()?`【候选人背景】${resumeContext()}`:''}
+要求：
+- 先给出本场 HR 面的关注重点 3 条，结合岗位/公司/候选人背景，点出这位候选人最可能被追问的风险点。
+- 再出 5-6 道 HR 面高频题，覆盖：求职动机、职业稳定性/离职原因、薪资预期、职业规划/offer 选择。社招侧重离职原因/跳槽频率/空窗期；校招侧重 offer 选择/稳定性/长期发展。若背景里有明显风险点（频繁跳槽、转行、空窗、涨幅预期过高），至少安排 1-2 道针对性题。
+- 每题给出：题目（HR 真实会怎么问）、HR 真正想判断什么、回答原则（2-4 句，强调真诚/边界/表达策略）、踩坑提醒（哪些说法会减分）、追问方向。
+严格只返回如下 JSON，不要任何多余文字或 markdown：
+{"focus":["重点1","重点2","重点3"],"questions":[{"topic":"主题","question":"题目","intent":"HR真正想判断什么","principle":"回答原则","pitfall":"踩坑提醒","followup":"追问方向"}]}`;
+      try{
+        const content=await AIProxy.chat([{role:'system',content:'你是专业 HR 面试官与求职教练，只返回 JSON。'},{role:'user',content:prompt}]);
+        const d=parseJSON(content);
+        result.innerHTML=renderHR(d);
+      }catch(err){
+        empty.classList.remove('hidden'); empty.textContent='生成失败：'+(err.message||'请重试');
+      }
+      btn.disabled=false; btn.textContent=old;
+    });
+    function renderHR(d){
+      const focus=(Array.isArray(d.focus)?d.focus:[]).map(f=>`<li class="flex gap-2"><span class="text-indigo">▸</span><span>${escapeHtml(f)}</span></li>`).join('');
+      const qs=(Array.isArray(d.questions)?d.questions:[]).map((q,i)=>`
+        <div class="bg-white rounded-2xl shadow-soft p-5">
+          <div class="flex items-center gap-2 mb-2"><span class="text-xs bg-indigo/10 text-indigo px-2 py-0.5 rounded-full">Q${i+1}</span><span class="text-xs text-gray-400">${escapeHtml(q.topic||'')}</span></div>
+          <div class="font-medium text-gray-800 mb-3">${escapeHtml(q.question||'')}</div>
+          <div class="space-y-2.5 text-sm">
+            <div><span class="text-xs font-semibold text-brandorange">🎯 HR 真正想判断</span><div class="text-gray-600 mt-0.5">${escapeHtml(q.intent||'')}</div></div>
+            <div><span class="text-xs font-semibold text-brandgreen">✅ 回答原则</span><div class="text-gray-600 mt-0.5">${escapeHtml(q.principle||'')}</div></div>
+            <div><span class="text-xs font-semibold text-red-500">⚠️ 踩坑提醒</span><div class="text-gray-600 mt-0.5">${escapeHtml(q.pitfall||'')}</div></div>
+            <div><span class="text-xs font-semibold text-gray-500">🔍 追问方向</span><div class="text-gray-600 mt-0.5">${escapeHtml(q.followup||'')}</div></div>
+          </div>
+        </div>`).join('');
+      return `<div class="bg-gradient-to-br from-indigo/5 to-purple-100/20 rounded-2xl p-5">
+        <div class="text-sm font-bold mb-3 flex items-center gap-2">👀 HR 关注重点</div>
+        <ul class="space-y-1.5 text-sm text-gray-700">${focus}</ul>
+      </div>${qs}`;
+    }
+
+    /* ===== 薪资谈判 ===== */
+    document.getElementById('salGen').addEventListener('click',async ()=>{
+      const b=baseInfo();
+      if(!b.job){ alert('请先填写目标岗位'); return; }
+      const cur=document.getElementById('curPay').value.trim();
+      const expect=document.getElementById('expectPay').value.trim();
+      const hasOffer=document.getElementById('hasOffer').value;
+      const btn=document.getElementById('salGen'); const result=document.getElementById('salResult'); const empty=document.getElementById('salEmpty');
+      btn.disabled=true; const old=btn.textContent; btn.innerHTML='<span class="spin"></span> 生成中…';
+      empty.classList.add('hidden'); result.innerHTML='';
+      const prompt=`你是资深职业顾问，精通中国互联网薪资谈判。为候选人生成一份薪资谈判方案。
+【目标岗位】${b.job}${b.company?`\n【目标公司】${b.company}`:''}
+【求职阶段】${b.stage}
+【当前年度总包】${cur||'未提供'}
+【期望】${expect||'未提供'}
+【是否手握竞品 offer】${hasOffer}
+请基于这些原则：薪资由公司薪酬带/预算/内部公平/市场价共同决定；HR 的 KPI 是在预算内招到人而非压到最低；要算年度总包而非月薪；尽量让对方先出牌；绝不说出底线。
+请给出：
+- calibration：一段认知校准（80-150字，说明薪资由谁决定、为什么优秀且合理报价时 HR 有动力帮你争取）。
+- targets：理想/目标/底线三个数字的设定思路（结合其期望给出方法与建议区间，不要编造具体市场数据，可提醒用脉脉/看准/牛客等渠道核实）。
+- scripts：可直接说出口的话术，至少覆盖四个场景：①面试中首次被问期望薪资 ②收到 offer 低于预期如何争取 ③有竞品 offer 如何使用 ④校招/体系固定时怎么谈。每条含 scenario、say（具体话术）、avoid（注意/避免）。
+- redlines：谈判红线 4-6 条。
+- checklist：拿到书面 offer 后的确认清单 6-8 条。
+严格只返回如下 JSON，不要任何多余文字或 markdown：
+{"calibration":"...","targets":"...","scripts":[{"scenario":"...","say":"...","avoid":"..."}],"redlines":["..."],"checklist":["..."]}`;
+      try{
+        const content=await AIProxy.chat([{role:'system',content:'你是专业薪资谈判顾问，只返回 JSON。'},{role:'user',content:prompt}]);
+        const d=parseJSON(content);
+        result.innerHTML=renderSalary(d);
+      }catch(err){
+        empty.classList.remove('hidden'); empty.textContent='生成失败：'+(err.message||'请重试');
+      }
+      btn.disabled=false; btn.textContent=old;
+    });
+    function renderSalary(d){
+      const scripts=(Array.isArray(d.scripts)?d.scripts:[]).map((s,i)=>`
+        <div class="bg-white rounded-xl p-4 border border-gray-100">
+          <div class="text-sm font-semibold text-gray-800 mb-2">场景 ${i+1}：${escapeHtml(s.scenario||'')}</div>
+          <div class="bg-indigo/5 rounded-lg p-3 text-sm text-gray-700 leading-relaxed mb-2">💬 ${escapeHtml(s.say||'')}</div>
+          ${s.avoid?`<div class="text-xs text-brandorange">⚠️ ${escapeHtml(s.avoid)}</div>`:''}
+        </div>`).join('');
+      const li=(arr,cls)=>(Array.isArray(arr)?arr:[]).map(x=>`<li class="flex gap-2 text-sm text-gray-600"><span class="${cls}">·</span><span>${escapeHtml(x)}</span></li>`).join('');
+      return `
+        <div class="bg-gradient-to-br from-indigo/5 to-purple-100/20 rounded-2xl p-5">
+          <div class="text-sm font-bold mb-2 flex items-center gap-2">🧭 认知校准</div>
+          <p class="text-sm text-gray-700 leading-relaxed">${escapeHtml(d.calibration||'')}</p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-soft p-5">
+          <div class="text-sm font-bold mb-2 flex items-center gap-2">🎯 三个关键数字</div>
+          <p class="text-sm text-gray-700 leading-relaxed whitespace-pre-line">${escapeHtml(d.targets||'')}</p>
+        </div>
+        <div>
+          <div class="text-sm font-bold mb-3 px-1">🗣️ 分场景话术</div>
+          <div class="space-y-3">${scripts}</div>
+        </div>
+        <div class="grid md:grid-cols-2 gap-4">
+          <div class="bg-red-50 rounded-2xl p-5">
+            <div class="text-sm font-bold text-red-500 mb-3">🚫 谈判红线</div>
+            <ul class="space-y-1.5">${li(d.redlines,'text-red-400')}</ul>
+          </div>
+          <div class="bg-emerald-50 rounded-2xl p-5">
+            <div class="text-sm font-bold text-brandgreen mb-3">📋 Offer 确认清单</div>
+            <ul class="space-y-1.5">${li(d.checklist,'text-brandgreen')}</ul>
+          </div>
+        </div>`;
+    }
+  </script>
+</body>
+</html>
