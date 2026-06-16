@@ -178,42 +178,141 @@
             <h2 class="text-lg font-bold">选择目标岗位</h2>
             <span class="text-brandorange text-sm">*必选</span>
           </div>
-          <div class="grid grid-cols-2 md:grid-cols-3 gap-3" data-group="job" data-mode="single">
-            <div class="option-card rounded-xl p-4 relative" data-value="ai-pm">
-              <span class="check absolute top-3 right-3 text-indigo">✓</span>
-              <div class="text-2xl mb-1">📦</div>
-              <div class="font-medium">AI产品经理</div>
-              <div class="text-xs text-gray-400 mt-0.5">策略/平台/应用</div>
+          <div data-group="job" data-mode="single">
+            <div class="text-xs font-semibold text-gray-400 mb-2 flex items-center gap-1">💻 技术类</div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+              <div class="option-card rounded-xl p-3 relative" data-value="backend">
+                <span class="check absolute top-2 right-2 text-indigo">✓</span>
+                <div class="text-xl mb-0.5">⚙️</div>
+                <div class="font-medium text-sm">后端开发</div>
+                <div class="text-xs text-gray-400 mt-0.5">服务端/高并发</div>
+              </div>
+              <div class="option-card rounded-xl p-3 relative" data-value="frontend">
+                <span class="check absolute top-2 right-2 text-indigo">✓</span>
+                <div class="text-xl mb-0.5">🎨</div>
+                <div class="font-medium text-sm">前端开发</div>
+                <div class="text-xs text-gray-400 mt-0.5">Web/工程化</div>
+              </div>
+              <div class="option-card rounded-xl p-3 relative" data-value="mobile">
+                <span class="check absolute top-2 right-2 text-indigo">✓</span>
+                <div class="text-xl mb-0.5">📱</div>
+                <div class="font-medium text-sm">移动端</div>
+                <div class="text-xs text-gray-400 mt-0.5">iOS/Android</div>
+              </div>
+              <div class="option-card rounded-xl p-3 relative" data-value="algo">
+                <span class="check absolute top-2 right-2 text-indigo">✓</span>
+                <div class="text-xl mb-0.5">🧠</div>
+                <div class="font-medium text-sm">算法/AI</div>
+                <div class="text-xs text-gray-400 mt-0.5">NLP/CV/大模型</div>
+              </div>
+              <div class="option-card rounded-xl p-3 relative" data-value="agent">
+                <span class="check absolute top-2 right-2 text-indigo">✓</span>
+                <div class="text-xl mb-0.5">🦾</div>
+                <div class="font-medium text-sm">Agent开发</div>
+                <div class="text-xs text-gray-400 mt-0.5">智能体/多框架</div>
+              </div>
+              <div class="option-card rounded-xl p-3 relative" data-value="data-eng">
+                <span class="check absolute top-2 right-2 text-indigo">✓</span>
+                <div class="text-xl mb-0.5">🔧</div>
+                <div class="font-medium text-sm">数据工程</div>
+                <div class="text-xs text-gray-400 mt-0.5">数仓/ETL/大数据</div>
+              </div>
+              <div class="option-card rounded-xl p-3 relative" data-value="architect">
+                <span class="check absolute top-2 right-2 text-indigo">✓</span>
+                <div class="text-xl mb-0.5">🏗️</div>
+                <div class="font-medium text-sm">架构师</div>
+                <div class="text-xs text-gray-400 mt-0.5">系统设计/选型</div>
+              </div>
+              <div class="option-card rounded-xl p-3 relative" data-value="sre">
+                <span class="check absolute top-2 right-2 text-indigo">✓</span>
+                <div class="text-xl mb-0.5">🛡️</div>
+                <div class="font-medium text-sm">SRE/运维</div>
+                <div class="text-xs text-gray-400 mt-0.5">稳定性/可观测</div>
+              </div>
+              <div class="option-card rounded-xl p-3 relative" data-value="security">
+                <span class="check absolute top-2 right-2 text-indigo">✓</span>
+                <div class="text-xl mb-0.5">🔒</div>
+                <div class="font-medium text-sm">安全</div>
+                <div class="text-xs text-gray-400 mt-0.5">攻防/合规</div>
+              </div>
             </div>
-            <div class="option-card rounded-xl p-4 relative" data-value="ai-ops">
-              <span class="check absolute top-3 right-3 text-indigo">✓</span>
-              <div class="text-2xl mb-1">📊</div>
-              <div class="font-medium">AI运营</div>
-              <div class="text-xs text-gray-400 mt-0.5">数据/AIGC内容</div>
+
+            <div class="text-xs font-semibold text-gray-400 mb-2 flex items-center gap-1">📦 产品类</div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+              <div class="option-card rounded-xl p-3 relative" data-value="pm">
+                <span class="check absolute top-2 right-2 text-indigo">✓</span>
+                <div class="text-xl mb-0.5">📦</div>
+                <div class="font-medium text-sm">产品经理</div>
+                <div class="text-xs text-gray-400 mt-0.5">C端/B端/增长</div>
+              </div>
+              <div class="option-card rounded-xl p-3 relative" data-value="ai-pm">
+                <span class="check absolute top-2 right-2 text-indigo">✓</span>
+                <div class="text-xl mb-0.5">✨</div>
+                <div class="font-medium text-sm">AI产品经理</div>
+                <div class="text-xs text-gray-400 mt-0.5">大模型/智能化</div>
+              </div>
+              <div class="option-card rounded-xl p-3 relative" data-value="game-design">
+                <span class="check absolute top-2 right-2 text-indigo">✓</span>
+                <div class="text-xl mb-0.5">🎮</div>
+                <div class="font-medium text-sm">游戏策划</div>
+                <div class="text-xs text-gray-400 mt-0.5">数值/系统/玩法</div>
+              </div>
             </div>
-            <div class="option-card rounded-xl p-4 relative" data-value="agent">
-              <span class="check absolute top-3 right-3 text-indigo">✓</span>
-              <div class="text-2xl mb-1">🤖</div>
-              <div class="font-medium">Agent开发</div>
-              <div class="text-xs text-gray-400 mt-0.5">智能体/多框架</div>
+
+            <div class="text-xs font-semibold text-gray-400 mb-2 flex items-center gap-1">📈 商业类</div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+              <div class="option-card rounded-xl p-3 relative" data-value="operations">
+                <span class="check absolute top-2 right-2 text-indigo">✓</span>
+                <div class="text-xl mb-0.5">📈</div>
+                <div class="font-medium text-sm">运营</div>
+                <div class="text-xs text-gray-400 mt-0.5">用户/内容/活动</div>
+              </div>
+              <div class="option-card rounded-xl p-3 relative" data-value="ai-ops">
+                <span class="check absolute top-2 right-2 text-indigo">✓</span>
+                <div class="text-xl mb-0.5">🤖</div>
+                <div class="font-medium text-sm">AI运营</div>
+                <div class="text-xs text-gray-400 mt-0.5">AIGC/数据增长</div>
+              </div>
+              <div class="option-card rounded-xl p-3 relative" data-value="marketing">
+                <span class="check absolute top-2 right-2 text-indigo">✓</span>
+                <div class="text-xl mb-0.5">📣</div>
+                <div class="font-medium text-sm">市场营销</div>
+                <div class="text-xs text-gray-400 mt-0.5">品牌/投放/增长</div>
+              </div>
+              <div class="option-card rounded-xl p-3 relative" data-value="biz-analysis">
+                <span class="check absolute top-2 right-2 text-indigo">✓</span>
+                <div class="text-xl mb-0.5">💼</div>
+                <div class="font-medium text-sm">商业分析</div>
+                <div class="text-xs text-gray-400 mt-0.5">战略/商业化</div>
+              </div>
             </div>
-            <div class="option-card rounded-xl p-4 relative" data-value="algo">
-              <span class="check absolute top-3 right-3 text-indigo">✓</span>
-              <div class="text-2xl mb-1">🧠</div>
-              <div class="font-medium">算法工程师</div>
-              <div class="text-xs text-gray-400 mt-0.5">NLP/CV/多模态</div>
-            </div>
-            <div class="option-card rounded-xl p-4 relative" data-value="frontend">
-              <span class="check absolute top-3 right-3 text-indigo">✓</span>
-              <div class="text-2xl mb-1">🎨</div>
-              <div class="font-medium">前端开发</div>
-              <div class="text-xs text-gray-400 mt-0.5">AI应用交互</div>
-            </div>
-            <div class="option-card rounded-xl p-4 relative" data-value="backend">
-              <span class="check absolute top-3 right-3 text-indigo">✓</span>
-              <div class="text-2xl mb-1">⚙️</div>
-              <div class="font-medium">后端开发</div>
-              <div class="text-xs text-gray-400 mt-0.5">AI服务/部署</div>
+
+            <div class="text-xs font-semibold text-gray-400 mb-2 flex items-center gap-1">🧩 职能类</div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div class="option-card rounded-xl p-3 relative" data-value="data-analyst">
+                <span class="check absolute top-2 right-2 text-indigo">✓</span>
+                <div class="text-xl mb-0.5">📊</div>
+                <div class="font-medium text-sm">数据分析师</div>
+                <div class="text-xs text-gray-400 mt-0.5">SQL/AB/指标</div>
+              </div>
+              <div class="option-card rounded-xl p-3 relative" data-value="hr-role">
+                <span class="check absolute top-2 right-2 text-indigo">✓</span>
+                <div class="text-xl mb-0.5">👥</div>
+                <div class="font-medium text-sm">人力资源HR</div>
+                <div class="text-xs text-gray-400 mt-0.5">招聘/HRBP</div>
+              </div>
+              <div class="option-card rounded-xl p-3 relative" data-value="legal">
+                <span class="check absolute top-2 right-2 text-indigo">✓</span>
+                <div class="text-xl mb-0.5">⚖️</div>
+                <div class="font-medium text-sm">法务</div>
+                <div class="text-xs text-gray-400 mt-0.5">合规/合同</div>
+              </div>
+              <div class="option-card rounded-xl p-3 relative" data-value="finance">
+                <span class="check absolute top-2 right-2 text-indigo">✓</span>
+                <div class="text-xl mb-0.5">💰</div>
+                <div class="font-medium text-sm">财务</div>
+                <div class="text-xs text-gray-400 mt-0.5">FP&A/风控</div>
+              </div>
             </div>
           </div>
         </section>
@@ -368,7 +467,12 @@
   <!-- ===== 交互脚本 ===== -->
   <script>
     const selections = { job:null, level:null, round:'mentor', type:[], duration:'standard', input:'video' };
-    const jobNames = { 'ai-pm':'AI产品经理','ai-ops':'AI运营','agent':'Agent开发','algo':'算法工程师','frontend':'前端开发','backend':'后端开发' };
+    const jobNames = {
+      'backend':'后端开发','frontend':'前端开发','mobile':'移动端开发','algo':'算法/AI工程师','agent':'Agent开发工程师','data-eng':'数据工程师','architect':'架构师','sre':'SRE/运维工程师','security':'安全工程师',
+      'pm':'产品经理','ai-pm':'AI产品经理','game-design':'游戏策划',
+      'operations':'运营','ai-ops':'AI运营','marketing':'市场营销','biz-analysis':'商业分析',
+      'data-analyst':'数据分析师','hr-role':'人力资源(HR)','legal':'法务','finance':'财务'
+    };
     const levelNames = { intern:'实习', campus:'校招', junior:'初级', mid:'中级', senior:'高级', expert:'专家' };
     const roundNames = { mentor:'业务一面·Mentor面', leader:'业务二面·Leader面', hr:'HR面' };
     const durNames = { quick:'快速版 15分钟', standard:'标准版 30分钟', deep:'深度版 60分钟' };

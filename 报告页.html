@@ -313,6 +313,10 @@
     }
 
     async function generateReport(attempt=0){
+      // AI 产品经理专项评分参考（来自面试 skill 知识库），在调用时计算以确保 jobName 已就绪
+      const roleRubric = /AI产品/.test(jobName)
+        ? `\n【AI产品经理专项评分参考】判断"岗位匹配度"和"专业深度"时，按 AI PM 标准额外考察：对 AI 能力边界的真实理解、AI 产品化（把技术转成解决问题的产品）、数据思维、用业务指标而非单纯准确率评估效果、人机协作与错误兜底设计。只会背 AI 概念、讲不清边界/兜底/效果指标的，岗位匹配度与专业深度不应超过 65 分。\n`
+        : '';
       let qaText='';
       qaRecords.forEach((r,i)=>{ qaText += `问题${i+1}：${r.question}\n候选人回答：${r.answer}\n\n`; });
       const prompt = `你是一位严格、专业的面试评分专家。请根据以下面试问答记录，对候选人（应聘${jobName}，${levelName}级别${meta.roundName?'，本场为'+meta.roundName:''}）进行专业评分。
@@ -321,7 +325,7 @@
 ${qaText}
 【评分维度与权重】
 1. 岗位匹配度(30%) 2. 逻辑清晰度(25%) 3. 语言流畅度(15%) 4. 专业深度(15%) 5. 自信心(10%) 6. 价值表达(5%)
-【评分标尺】请按真实校招/社招的通过标准打分，不要客气：60分=勉强及格存在明显短板，75分=达到该职级平均水平，85分以上=明显优于多数同职级候选人（必须有充分理由），95分以上原则上不给。回答空泛、缺乏具体案例和数据的，相应维度不应超过65分。
+【评分标尺】请按真实校招/社招的通过标准打分，不要客气：60分=勉强及格存在明显短板，75分=达到该职级平均水平，85分以上=明显优于多数同职级候选人（必须有充分理由），95分以上原则上不给。回答空泛、缺乏具体案例和数据的，相应维度不应超过65分。${roleRubric}
 【要求】每个维度0-100分；给3条整体改进建议；每题给得分(0-100)、1-2条亮点、1-2条改进点；严格客观。
 【必须严格按以下JSON格式返回，不要任何其他文字，不要markdown代码块】
 {"scores":{"jobMatch":数字,"logic":数字,"fluency":数字,"depth":数字,"confidence":数字,"value":数字},"overallComment":"一句话评价(50字内)","suggestions":["建议1","建议2","建议3"],"questions":[{"score":数字,"good":["亮点"],"bad":["改进"]}]}`;
@@ -492,10 +496,12 @@ ${qaText}
       (result.questions||[]).forEach((item,idx)=>{ const rec=qaRecords[idx]||{}; const sc=item.score||0;
         const color=sc>=80?'#10B981':sc>=60?'#6366F1':'#F59E0B';
         const card=document.createElement('div'); card.className='bg-white rounded-2xl shadow-soft overflow-hidden';
-        card.innerHTML=`<div class="flex items-center justify-between p-5 cursor-pointer toggle-head"><div class="flex items-center gap-3 flex-1"><span class="text-xs text-gray-400">Q${idx+1}</span><span class="text-sm font-medium text-gray-700">${escapeHtml(rec.question||'')}</span></div><div class="flex items-center gap-3"><span class="text-lg font-bold" style="color:${color}">${sc}</span><span class="toggle-icon text-gray-400 transition-transform">▼</span></div></div><div class="toggle-body hidden px-5 pb-5 border-t border-gray-50 pt-4"><div class="grid md:grid-cols-2 gap-4 mb-4"><div><div class="text-xs font-semibold text-brandgreen mb-2">✅ 亮点</div><ul class="space-y-1.5">${(item.good||[]).map(g=>`<li class="text-sm text-gray-600 flex gap-1.5"><span class="text-brandgreen">·</span>${escapeHtml(g)}</li>`).join('')}</ul></div><div><div class="text-xs font-semibold text-brandorange mb-2">⚠️ 改进点</div><ul class="space-y-1.5">${(item.bad||[]).map(b=>`<li class="text-sm text-gray-600 flex gap-1.5"><span class="text-brandorange">·</span>${escapeHtml(b)}</li>`).join('')}</ul></div></div><div><div class="text-xs font-semibold text-gray-500 mb-2">📝 你的回答</div><div class="bg-gray-50 rounded-xl p-4 text-sm text-gray-600 leading-relaxed">${escapeHtml(rec.answer||'')}</div></div></div>`;
+        card.innerHTML=`<div class="flex items-center justify-between p-5 cursor-pointer toggle-head"><div class="flex items-center gap-3 flex-1"><span class="text-xs text-gray-400">Q${idx+1}</span><span class="text-sm font-medium text-gray-700">${escapeHtml(rec.question||'')}</span></div><div class="flex items-center gap-3"><span class="text-lg font-bold" style="color:${color}">${sc}</span><span class="toggle-icon text-gray-400 transition-transform">▼</span></div></div><div class="toggle-body hidden px-5 pb-5 border-t border-gray-50 pt-4"><div class="grid md:grid-cols-2 gap-4 mb-4"><div><div class="text-xs font-semibold text-brandgreen mb-2">✅ 亮点</div><ul class="space-y-1.5">${(item.good||[]).map(g=>`<li class="text-sm text-gray-600 flex gap-1.5"><span class="text-brandgreen">·</span>${escapeHtml(g)}</li>`).join('')}</ul></div><div><div class="text-xs font-semibold text-brandorange mb-2">⚠️ 改进点</div><ul class="space-y-1.5">${(item.bad||[]).map(b=>`<li class="text-sm text-gray-600 flex gap-1.5"><span class="text-brandorange">·</span>${escapeHtml(b)}</li>`).join('')}</ul></div></div><div><div class="text-xs font-semibold text-gray-500 mb-2">📝 你的回答</div><div class="bg-gray-50 rounded-xl p-4 text-sm text-gray-600 leading-relaxed">${escapeHtml(rec.answer||'')}</div></div><div class="mt-4"><button class="gva-btn text-xs px-3 py-1.5 rounded-lg border border-indigo/30 text-indigo hover:bg-indigo/5 transition font-medium">🆚 看「好答案 vs 差答案」示范</button><div class="gva-slot hidden mt-3"></div></div></div>`;
         qList.appendChild(card);
         const head=card.querySelector('.toggle-head'),body=card.querySelector('.toggle-body'),icon=card.querySelector('.toggle-icon');
         head.addEventListener('click',()=>{ body.classList.toggle('hidden'); icon.style.transform=body.classList.contains('hidden')?'rotate(0)':'rotate(180deg)'; });
+        const gvaBtn=card.querySelector('.gva-btn'), gvaSlot=card.querySelector('.gva-slot');
+        if(gvaBtn) gvaBtn.addEventListener('click',()=>genGoodBadAnswer(rec.question||'', rec.answer||'', gvaBtn, gvaSlot));
         if(idx===0){ body.classList.remove('hidden'); icon.style.transform='rotate(180deg)'; }
       });
 
@@ -504,6 +510,55 @@ ${qaText}
 
       document.getElementById('loadingView').classList.add('hidden');
       document.getElementById('reportView').classList.remove('hidden');
+    }
+
+    /* ===== 好答案 vs 差答案 示范（来自面试 skill 模板，按需生成）===== */
+    async function genGoodBadAnswer(question, answer, btn, slot){
+      if(!question){ slot.innerHTML='<div class="text-sm text-gray-400">缺少题目，无法生成示范。</div>'; slot.classList.remove('hidden'); return; }
+      if(slot.dataset.loaded==='1'){ slot.classList.toggle('hidden'); return; }
+      btn.disabled=true; const old=btn.textContent; btn.textContent='AI 正在生成示范…';
+      const prompt=`你是资深面试教练。针对下面这道【${jobName}（${levelName}级别）】面试题，生成"好答案 vs 差答案"对比示范，用于帮候选人改进。
+【题目】${question}
+${answer?`【候选人本次的回答（可参考其薄弱处，但不要照抄）】${answer}`:''}
+要求：
+- 先判断题型（技术题/行为题/产品设计题/案例题 之一）。
+- 差答案要"像真实候选人会说的话"（空泛、没证据、缺结构、经不起追问），6-10句，不要故意胡说。
+- 好答案要贴合该岗位与题目：技术/产品/案例题先结论后原理再结合具体场景、权衡与量化结果；行为题按 STAR/BEI 结构突出个人贡献与复盘。8-14句，保留口语化面试表达，不要背稿腔。
+- 给差答案的3个问题、好答案的3个亮点、面试官可能的2个追问、1条临场作答模板。
+严格只返回如下 JSON，不要任何多余文字或 markdown 代码块：
+{"type":"题型","bad":"差答案示例","badWhy":["问题1","问题2","问题3"],"good":"好答案示例","goodWhy":["亮点1","亮点2","亮点3"],"followups":["追问1","追问2"],"template":"临场作答模板"}`;
+      try{
+        const content=await AIProxy.chat([{role:'system',content:'你是专业面试教练，只返回JSON格式结果。'},{role:'user',content:prompt}])||'';
+        const cleaned=content.trim().replace(/```json/gi,'').replace(/```/g,'').trim();
+        const s=cleaned.indexOf('{'), e=cleaned.lastIndexOf('}');
+        if(s<0||e<=s) throw new Error('返回内容不可解析');
+        const d=JSON.parse(cleaned.slice(s,e+1));
+        slot.innerHTML=renderGoodBad(d);
+        slot.dataset.loaded='1'; slot.classList.remove('hidden');
+        btn.textContent='🆚 收起 / 展开示范';
+      }catch(err){
+        slot.innerHTML=`<div class="text-sm text-brandorange">生成失败，请重试：${escapeHtml(err.message||'未知错误')}</div>`;
+        slot.classList.remove('hidden'); btn.textContent=old;
+      }
+      btn.disabled=false;
+    }
+    function renderGoodBad(d){
+      const li=arr=>(Array.isArray(arr)?arr:[]).map(x=>`<li class="flex gap-1.5"><span class="text-gray-300">·</span><span>${escapeHtml(x)}</span></li>`).join('');
+      return `<div class="border border-indigo/15 rounded-xl overflow-hidden">
+        <div class="bg-indigo/5 px-4 py-2 text-xs font-semibold text-indigo flex items-center gap-2">🆚 好答案 vs 差答案<span class="text-gray-400 font-normal">${escapeHtml(d.type||'')}</span></div>
+        <div class="p-4 space-y-4">
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="bg-red-50 rounded-xl p-3"><div class="text-xs font-semibold text-red-500 mb-1.5">❌ 差答案示例</div><div class="text-sm text-gray-600 leading-relaxed">${escapeHtml(d.bad||'')}</div></div>
+            <div class="bg-emerald-50 rounded-xl p-3"><div class="text-xs font-semibold text-brandgreen mb-1.5">✅ 好答案示例</div><div class="text-sm text-gray-600 leading-relaxed">${escapeHtml(d.good||'')}</div></div>
+          </div>
+          <div class="grid md:grid-cols-2 gap-4">
+            <div><div class="text-xs font-semibold text-red-500 mb-1.5">为什么差</div><ul class="space-y-1 text-sm text-gray-600">${li(d.badWhy)}</ul></div>
+            <div><div class="text-xs font-semibold text-brandgreen mb-1.5">为什么好</div><ul class="space-y-1 text-sm text-gray-600">${li(d.goodWhy)}</ul></div>
+          </div>
+          ${(Array.isArray(d.followups)&&d.followups.length)?`<div><div class="text-xs font-semibold text-gray-500 mb-1.5">🔍 面试官可能追问</div><ul class="space-y-1 text-sm text-gray-600">${li(d.followups)}</ul></div>`:''}
+          ${d.template?`<div class="bg-indigo/5 rounded-xl p-3"><div class="text-xs font-semibold text-indigo mb-1.5">📝 临场作答模板</div><div class="text-sm text-gray-600 leading-relaxed">${escapeHtml(d.template)}</div></div>`:''}
+        </div>
+      </div>`;
     }
 
     function showError(msg){
