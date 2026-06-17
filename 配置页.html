@@ -347,31 +347,38 @@
           </div>
         </section>
 
-        <!-- 模块：面试轮次（决定面试官人设） -->
-        <section class="bg-white rounded-2xl shadow-soft p-6 mb-6">
-          <div class="flex items-center gap-2 mb-4">
+        <!-- 模块：面试轮次（可多选，按顺序依次进行，每轮各自出报告） -->
+        <section id="roundSection" class="bg-white rounded-2xl shadow-soft p-6 mb-6">
+          <div class="flex items-center gap-2 mb-2">
             <span class="text-lg">🪜</span>
             <h2 class="text-lg font-bold">面试轮次</h2>
-            <span class="text-gray-400 text-sm">不同轮次由不同人设的面试官主持，考察重点完全不同</span>
+            <span class="text-brandorange text-sm">*至少选一项</span>
           </div>
-          <div class="grid md:grid-cols-3 gap-3" data-group="round" data-mode="single">
+          <p class="text-xs text-gray-400 mb-4">可多选。将按 <b>一面 → 二面 → 三面 → HR面</b> 的顺序依次进行：每完成一轮先出本轮报告，再询问你是否进入下一轮（下一轮会继承上一轮暴露的强弱项继续深入）。只选一项就是单轮专项练习。</p>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3" data-group="round" data-mode="multi">
             <div class="option-card rounded-xl p-4 relative" data-value="mentor">
               <span class="check absolute top-3 right-3 text-indigo">✓</span>
               <div class="text-2xl mb-1">🧑‍💻</div>
-              <div class="font-medium">业务一面 · Mentor面</div>
-              <div class="text-xs text-gray-400 mt-0.5">未来直属导师：抠项目细节、执行落地、上手速度</div>
+              <div class="font-medium">业务一面 · Mentor</div>
+              <div class="text-xs text-gray-400 mt-0.5">抠项目细节、执行落地、上手速度</div>
             </div>
             <div class="option-card rounded-xl p-4 relative" data-value="leader">
               <span class="check absolute top-3 right-3 text-indigo">✓</span>
               <div class="text-2xl mb-1">🧭</div>
-              <div class="font-medium">业务二面 · Leader面</div>
-              <div class="text-xs text-gray-400 mt-0.5">部门负责人：考思考深度、数据驱动、战略眼光</div>
+              <div class="font-medium">业务二面 · Leader</div>
+              <div class="text-xs text-gray-400 mt-0.5">思考深度、数据驱动、战略眼光</div>
+            </div>
+            <div class="option-card rounded-xl p-4 relative" data-value="director">
+              <span class="check absolute top-3 right-3 text-indigo">✓</span>
+              <div class="text-2xl mb-1">🏛️</div>
+              <div class="font-medium">三面 · 总监/交叉面</div>
+              <div class="text-xs text-gray-400 mt-0.5">跨团队协作、行业判断、价值观格局</div>
             </div>
             <div class="option-card rounded-xl p-4 relative" data-value="hr">
               <span class="check absolute top-3 right-3 text-indigo">✓</span>
               <div class="text-2xl mb-1">🤝</div>
               <div class="font-medium">HR面</div>
-              <div class="text-xs text-gray-400 mt-0.5">资深HR：动机稳定性、软素质、文化匹配</div>
+              <div class="text-xs text-gray-400 mt-0.5">动机稳定性、软素质、文化匹配</div>
             </div>
           </div>
         </section>
@@ -466,7 +473,7 @@
 
   <!-- ===== 交互脚本 ===== -->
   <script>
-    const selections = { job:null, level:null, round:'mentor', type:[], duration:'standard', input:'video' };
+    const selections = { job:null, level:null, round:['mentor'], type:[], duration:'standard', input:'video' };
     const jobNames = {
       'backend':'后端开发','frontend':'前端开发','mobile':'移动端开发','algo':'算法/AI工程师','agent':'Agent开发工程师','data-eng':'数据工程师','architect':'架构师','sre':'SRE/运维工程师','security':'安全工程师',
       'pm':'产品经理','ai-pm':'AI产品经理','game-design':'游戏策划',
@@ -474,7 +481,9 @@
       'data-analyst':'数据分析师','hr-role':'人力资源(HR)','legal':'法务','finance':'财务'
     };
     const levelNames = { intern:'实习', campus:'校招', junior:'初级', mid:'中级', senior:'高级', expert:'专家' };
-    const roundNames = { mentor:'业务一面·Mentor面', leader:'业务二面·Leader面', hr:'HR面' };
+    const roundNames = { mentor:'业务一面·Mentor面', leader:'业务二面·Leader面', director:'三面·总监/交叉面', hr:'HR面' };
+    const ROUND_ORDER = ['mentor','leader','director','hr'];
+    const orderedRounds = ()=>ROUND_ORDER.filter(r=>selections.round.includes(r));
     const durNames = { quick:'快速版 15分钟', standard:'标准版 30分钟', deep:'深度版 60分钟' };
     const inputNames = { voice:'语音回答', video:'视频回答', text:'文字回答' };
     const isLoggedIn = Object.keys(localStorage).some(key=>key.startsWith('sb-') && key.endsWith('-auth-token'));
@@ -575,12 +584,13 @@
       card.addEventListener('click',selectCard);card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectCard();}});
     });
     function updateState(){
-      const hasJD=Boolean(document.getElementById('jdText').value.trim()), ready=selections.job&&selections.level&&hasJD;
+      const hasJD=Boolean(document.getElementById('jdText').value.trim()), hasRound=orderedRounds().length>0, ready=selections.job&&selections.level&&hasRound&&hasJD;
       document.getElementById('startBtn').disabled=!ready;
       const summary=document.getElementById('summary');
       if(!hasJD){summary.textContent='请先填写或上传本次岗位 JD（必填）';summary.classList.remove('text-indigo','font-medium');}
       else if(!selections.job||!selections.level){summary.textContent='请再选择岗位和职级（必选）';summary.classList.remove('text-indigo','font-medium');}
-      else{summary.textContent=`${jobNames[selections.job]} · ${levelNames[selections.level]} · ${roundNames[selections.round]} · ${durNames[selections.duration]} · ${inputNames[selections.input]}`;summary.classList.add('text-indigo','font-medium');}
+      else if(!hasRound){summary.textContent='请至少选择一个面试轮次';summary.classList.remove('text-indigo','font-medium');}
+      else{const rs=orderedRounds();const roundPart=rs.length>1?`${rs.map(r=>roundNames[r]).join(' → ')}（共${rs.length}轮）`:(roundNames[rs[0]]||'未选轮次');summary.textContent=`${jobNames[selections.job]} · ${levelNames[selections.level]} · ${roundPart} · ${durNames[selections.duration]} · ${inputNames[selections.input]}`;summary.classList.add('text-indigo','font-medium');}
     }
     function mediaErrorMessage(error,inputMode){
       const target=error?.deviceLabel||(inputMode==='video'?'摄像头或麦克风':'麦克风');
@@ -594,7 +604,7 @@
       // 注：不再要求浏览器内置语音识别——面试页已支持云端录音转写，所有浏览器均可语音作答
     }
     document.getElementById('startBtn').addEventListener('click',async()=>{
-      if(!selections.job||!selections.level||!document.getElementById('jdText').value.trim()){document.getElementById('backgroundSection').scrollIntoView({behavior:'smooth'});return;}
+      if(!selections.job||!selections.level||!orderedRounds().length||!document.getElementById('jdText').value.trim()){document.getElementById('backgroundSection').scrollIntoView({behavior:'smooth'});return;}
       saveBackground();
       const btn=document.getElementById('startBtn'), deviceStatus=document.getElementById('deviceStatus'), deviceHelp=document.getElementById('deviceHelp');
       if(selections.input!=='text'){
@@ -602,7 +612,11 @@
         try{await testMedia(selections.input);deviceStatus.textContent='设备检测通过';deviceHelp.textContent='正在进入面试…';deviceHelp.className='text-xs text-brandgreen mt-3';}
         catch(e){deviceStatus.textContent='设备检测未通过';deviceHelp.textContent=mediaErrorMessage(e,selections.input);deviceHelp.className='text-xs text-brandorange mt-3';btn.disabled=false;return;}
       }
-      localStorage.setItem('interviewConfig',JSON.stringify(selections));window.location.href='面试页.html';
+      // 轮次按 一面→二面→三面→HR面 顺序排好；每次开始都清掉上一次的进度
+      localStorage.removeItem('interviewSeries');
+      const rounds=orderedRounds();
+      const cfg=Object.assign({},selections,{ rounds, round:rounds[0] });
+      localStorage.setItem('interviewConfig',JSON.stringify(cfg));window.location.href='面试页.html';
     });
     // 应用从简历上传页迁移过来的 JD 和目标岗位
     if(pendingJD){

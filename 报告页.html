@@ -55,6 +55,18 @@
       <p class="text-sm text-gray-400" id="reportMeta">AI产品经理 · 中级</p>
     </div>
 
+    <!-- 多轮：是否进入下一轮 -->
+    <div id="nextRoundBanner" class="hidden bg-gradient-to-br from-indigo/10 to-purple-100/30 border border-indigo/20 rounded-2xl p-5 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div>
+        <div class="font-bold mb-1" id="nextRoundTitle">本轮已完成</div>
+        <p class="text-sm text-gray-500" id="nextRoundDesc"></p>
+      </div>
+      <div class="flex gap-2 flex-shrink-0">
+        <button id="nextRoundBtn" class="gradient-btn text-white text-sm font-medium px-5 py-2.5 rounded-xl whitespace-nowrap">进入下一轮 →</button>
+        <button id="endSeriesBtn" class="bg-white border-2 border-gray-200 text-sm font-medium px-4 py-2.5 rounded-xl hover:border-indigo hover:text-indigo transition whitespace-nowrap">就到这里</button>
+      </div>
+    </div>
+
     <div class="bg-white rounded-2xl shadow-soft p-7 mb-6">
       <div class="grid md:grid-cols-2 gap-8 items-center">
         <div class="text-center md:text-left">
@@ -523,7 +535,7 @@ ${qaText}
       (result.questions||[]).forEach((item,idx)=>{ const rec=qaRecords[idx]||{}; const sc=item.score||0;
         const color=sc>=80?'#10B981':sc>=60?'#6366F1':'#F59E0B';
         const card=document.createElement('div'); card.className='bg-white rounded-2xl shadow-soft overflow-hidden';
-        card.innerHTML=`<div class="flex items-center justify-between p-5 cursor-pointer toggle-head"><div class="flex items-center gap-3 flex-1"><span class="text-xs text-gray-400">Q${idx+1}</span><span class="text-sm font-medium text-gray-700">${escapeHtml(rec.question||'')}</span></div><div class="flex items-center gap-3"><span class="text-lg font-bold" style="color:${color}">${sc}</span><span class="toggle-icon text-gray-400 transition-transform">▼</span></div></div><div class="toggle-body hidden px-5 pb-5 border-t border-gray-50 pt-4"><div class="grid md:grid-cols-2 gap-4 mb-4"><div><div class="text-xs font-semibold text-brandgreen mb-2">✅ 亮点</div><ul class="space-y-1.5">${(item.good||[]).map(g=>`<li class="text-sm text-gray-600 flex gap-1.5"><span class="text-brandgreen">·</span>${escapeHtml(g)}</li>`).join('')}</ul></div><div><div class="text-xs font-semibold text-brandorange mb-2">⚠️ 改进点</div><ul class="space-y-1.5">${(item.bad||[]).map(b=>`<li class="text-sm text-gray-600 flex gap-1.5"><span class="text-brandorange">·</span>${escapeHtml(b)}</li>`).join('')}</ul></div></div><div><div class="text-xs font-semibold text-gray-500 mb-2">📝 你的回答</div><div class="bg-gray-50 rounded-xl p-4 text-sm text-gray-600 leading-relaxed">${escapeHtml(rec.answer||'')}</div></div><div class="mt-4"><button class="gva-btn text-xs px-3 py-1.5 rounded-lg border border-indigo/30 text-indigo hover:bg-indigo/5 transition font-medium">🆚 看「好答案 vs 差答案」示范</button><div class="gva-slot hidden mt-3"></div></div></div>`;
+        card.innerHTML=`<div class="flex items-center justify-between p-5 cursor-pointer toggle-head"><div class="flex items-center gap-3 flex-1"><span class="text-xs text-gray-400">Q${idx+1}</span>${rec.roundName?`<span class="text-[10px] bg-indigo/10 text-indigo px-1.5 py-0.5 rounded whitespace-nowrap">${escapeHtml(rec.roundName)}</span>`:''}<span class="text-sm font-medium text-gray-700">${escapeHtml(rec.question||'')}</span></div><div class="flex items-center gap-3"><span class="text-lg font-bold" style="color:${color}">${sc}</span><span class="toggle-icon text-gray-400 transition-transform">▼</span></div></div><div class="toggle-body hidden px-5 pb-5 border-t border-gray-50 pt-4"><div class="grid md:grid-cols-2 gap-4 mb-4"><div><div class="text-xs font-semibold text-brandgreen mb-2">✅ 亮点</div><ul class="space-y-1.5">${(item.good||[]).map(g=>`<li class="text-sm text-gray-600 flex gap-1.5"><span class="text-brandgreen">·</span>${escapeHtml(g)}</li>`).join('')}</ul></div><div><div class="text-xs font-semibold text-brandorange mb-2">⚠️ 改进点</div><ul class="space-y-1.5">${(item.bad||[]).map(b=>`<li class="text-sm text-gray-600 flex gap-1.5"><span class="text-brandorange">·</span>${escapeHtml(b)}</li>`).join('')}</ul></div></div><div><div class="text-xs font-semibold text-gray-500 mb-2">📝 你的回答</div><div class="bg-gray-50 rounded-xl p-4 text-sm text-gray-600 leading-relaxed">${escapeHtml(rec.answer||'')}</div></div><div class="mt-4"><button class="gva-btn text-xs px-3 py-1.5 rounded-lg border border-indigo/30 text-indigo hover:bg-indigo/5 transition font-medium">🆚 看「好答案 vs 差答案」示范</button><div class="gva-slot hidden mt-3"></div></div></div>`;
         qList.appendChild(card);
         const head=card.querySelector('.toggle-head'),body=card.querySelector('.toggle-body'),icon=card.querySelector('.toggle-icon');
         head.addEventListener('click',()=>{ body.classList.toggle('hidden'); icon.style.transform=body.classList.contains('hidden')?'rotate(0)':'rotate(180deg)'; });
@@ -537,6 +549,7 @@ ${qaText}
 
       document.getElementById('loadingView').classList.add('hidden');
       document.getElementById('reportView').classList.remove('hidden');
+      if(!isViewMode) maybeOfferNextRound(); // 仅对刚完成的本场面试提示进入下一轮
     }
 
     /* ===== 好答案 vs 差答案 示范（来自面试 skill 模板，按需生成）===== */
@@ -586,6 +599,22 @@ ${answer?`【候选人本次的回答（可参考其薄弱处，但不要照抄�
           ${d.template?`<div class="bg-indigo/5 rounded-xl p-3"><div class="text-xs font-semibold text-indigo mb-1.5">📝 临场作答模板</div><div class="text-sm text-gray-600 leading-relaxed">${escapeHtml(d.template)}</div></div>`:''}
         </div>
       </div>`;
+    }
+
+    /* ===== 多轮：本轮报告出来后，询问是否进入下一轮 ===== */
+    function maybeOfferNextRound(){
+      let s=null; try{ s=JSON.parse(localStorage.getItem('interviewSeries')||'null'); }catch(e){}
+      if(!s || !Array.isArray(s.rounds) || s.index>=s.rounds.length-1) return; // 无后续轮次
+      const RN={mentor:'业务一面·Mentor面',leader:'业务二面·Leader面',director:'三面·总监/交叉面',hr:'HR面'};
+      const curName=RN[s.rounds[s.index]]||'本轮';
+      const nextKey=s.rounds[s.index+1], nextName=RN[nextKey]||'下一轮';
+      const remain=s.rounds.length-1-s.index;
+      document.getElementById('nextRoundTitle').textContent=`✅ ${curName} 已完成 · 还有 ${remain} 轮`;
+      document.getElementById('nextRoundDesc').textContent=`真实流程中通常这一轮通过后才进入下一轮。继续进入【${nextName}】？面试官会延续你本轮暴露的强项与待改进点继续深入。`;
+      const btn=document.getElementById('nextRoundBtn'); btn.textContent=`进入下一轮：${nextName} →`;
+      btn.onclick=()=>{ s.index+=1; localStorage.setItem('interviewSeries',JSON.stringify(s)); location.href='面试页.html'; };
+      document.getElementById('endSeriesBtn').onclick=()=>{ localStorage.removeItem('interviewSeries'); document.getElementById('nextRoundBanner').classList.add('hidden'); };
+      document.getElementById('nextRoundBanner').classList.remove('hidden');
     }
 
     function showError(msg){
