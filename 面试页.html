@@ -133,12 +133,20 @@
     </div>
   </div>
 
+  <!-- 面试开始前：出镜效果设置（美颜/虚拟背景预览） -->
+  <div id="setupBackdrop" class="hidden fixed inset-0 bg-black/40 z-20"></div>
+  <div id="prepBar" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-white rounded-2xl shadow-softlg border border-gray-200 px-5 py-4 max-w-md w-[92%] text-center">
+    <div class="text-sm font-bold mb-1">📹 先调整你的出镜效果</div>
+    <p class="text-xs text-gray-500 mb-3">在左上角「我的视频」窗里选择 <b>虚化 / 渐变 / 深色背景</b> 或开启 <b>✨ 美颜</b>，预览满意后再开始。<b>录制会在你点击开始后才启动</b>，调试过程不会被录进去。</p>
+    <button id="startInterviewBtn" class="gradient-btn text-white text-sm font-medium px-6 py-2.5 rounded-xl w-full">✅ 开始面试</button>
+  </div>
+
   <!-- 提前结束确认弹窗 -->
   <div id="interruptModal" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50">
     <div class="bg-white rounded-2xl p-7 max-w-sm mx-4 text-center">
       <div class="text-4xl mb-3">⏸️</div>
       <h3 class="text-xl font-bold mb-2">要提前结束本次面试吗？</h3>
-      <p class="text-gray-500 text-sm mb-6">已完成的回答会被保留，并基于当前进度生成报告。</p>
+      <p id="interruptDesc" class="text-gray-500 text-sm mb-6">已完成的回答会被保留，并基于当前进度生成报告。</p>
       <div class="flex gap-3">
         <button id="continueInterview" class="flex-1 py-2.5 rounded-xl border-2 border-gray-200 text-sm font-medium">继续面试</button>
         <button id="confirmInterrupt" class="flex-1 py-2.5 rounded-xl bg-brandorange text-white text-sm font-medium">提前结束</button>
@@ -201,11 +209,17 @@
     document.getElementById('configLabel').textContent = `${seriesTag}${jobName} · ${levelName} · ${roundName} · ${typeList} · ${inputNames[cfg.input] || inputNames.video}`;
     document.getElementById('qTotal').textContent = TOTAL_QUESTIONS;
 
+    // 进入面试页即清理上一场「已完成」的残留数据，避免刷新/直接打开报告页时串到旧的问答与报告
+    // （多轮衔接所需的 interviewSeries.carryover 不在此清理，仅清理单场产物）
+    localStorage.removeItem('qaRecords');
+    localStorage.removeItem('interviewMeta');
+    localStorage.removeItem('currentInterviewReport');
+
     let state = {
       inputMode: cfg.input || 'video',
       questionCount:0, messages:[], qaRecords:[], lastQuestion:'',
       waitingAnswer:false, isRecording:false, totalSeconds:dur.sec, timerId:null,
-      aiThinking:false,
+      aiThinking:false, started:false,
       mediaStream:null, recognition:null, transcript:'', liveTranscript:'',
       videoStream:null, videoRecorder:null, videoChunks:[], recordVideo:false
     };
@@ -528,9 +542,20 @@ ${roleGuide ? roleGuide + '\n' : ''}
       }catch(err){
         state.aiThinking=false;
         removeThinking();
-        addAIBubble('出题暂时失败，请稍后重试或结束本次面试。');
-        document.getElementById('progressTip').textContent='出题失败';
+        addRetryBubble(); // 出题失败：给出"重试"入口，不再让输入永久禁用导致卡死
+        document.getElementById('progressTip').textContent='出题失败，请点击重试';
       }
+    }
+
+    /* AI 出题失败时的兜底：展示一条可点击「重试」的气泡，避免主流程卡死 */
+    function addRetryBubble(){
+      const div=document.createElement('div'); div.className='flex gap-3 fade-up';
+      div.innerHTML=`<div class="w-9 h-9 rounded-full bg-indigo/10 flex items-center justify-center text-base flex-shrink-0">🤖</div>
+        <div class="max-w-[80%]"><div class="bg-indigo/5 rounded-2xl rounded-tl-sm px-5 py-3.5 text-sm text-gray-700 leading-relaxed">
+        网络或服务波动，这道题没生成出来。<button class="retry-ask ml-1 text-indigo font-medium underline">点此重试</button>，或点右上角「结束面试」生成已答部分的报告。
+        </div></div>`;
+      chatArea.appendChild(div); scrollBottom();
+      div.querySelector('.retry-ask').addEventListener('click',()=>{ if(state.aiThinking) return; div.remove(); askNextQuestion(); });
     }
 
     async function submitAnswer(answerText){
@@ -697,13 +722,21 @@ ${roleGuide ? roleGuide + '\n' : ''}
     }
 
     /* ===== 结束面试 + 上传视频 ===== */
-    document.getElementById('endBtn').addEventListener('click',()=>{ const m=document.getElementById('interruptModal'); m.classList.remove('hidden'); m.classList.add('flex'); });
+    document.getElementById('endBtn').addEventListener('click',()=>{
+      const noAnswer = state.qaRecords.length===0;
+      document.getElementById('interruptDesc').textContent = noAnswer
+        ? '你还没有作答，结束后不会生成报告，将返回配置页。'
+        : '已完成的回答会被保留，并基于当前进度生成报告。';
+      document.getElementById('confirmInterrupt').textContent = noAnswer ? '结束并返回' : '提前结束';
+      const m=document.getElementById('interruptModal'); m.classList.remove('hidden'); m.classList.add('flex');
+    });
     document.getElementById('continueInterview').addEventListener('click',()=>{ const m=document.getElementById('interruptModal'); m.classList.add('hidden'); m.classList.remove('flex'); });
     document.getElementById('confirmInterrupt').addEventListener('click',()=>{
       const m=document.getElementById('interruptModal'); m.classList.add('hidden'); m.classList.remove('flex');
       finishInterview(true);
     });
-    document.getElementById('goReport').addEventListener('click',()=>{ window.location.href='报告页.html'; });
+    let reportTarget='报告页.html';
+    document.getElementById('goReport').addEventListener('click',()=>{ window.location.href=reportTarget; });
 
     let finished = false;
     async function finishInterview(early=false){
@@ -716,6 +749,23 @@ ${roleGuide ? roleGuide + '\n' : ''}
       pipelineOn=false; // 停止画面绘制（预览冻结=已结束）
       if(state.videoStream) stopFrameSampling();
       removeLiveUserBubble();
+
+      // 一题未答（出镜设置阶段退出 / 倒计时归零且未作答）：不生成报告，避免报告页空数据报错
+      if(state.qaRecords.length===0){
+        localStorage.removeItem('qaRecords');
+        localStorage.removeItem('interviewMeta');
+        localStorage.removeItem('currentInterviewReport');
+        localStorage.removeItem('interviewSeries');
+        if(state.mediaStream) state.mediaStream.getTracks().forEach(t=>t.stop());
+        if(state.videoStream) state.videoStream.getTracks().forEach(t=>t.stop());
+        const m=document.getElementById('endModal'); m.classList.remove('hidden'); m.classList.add('flex');
+        document.getElementById('endEmoji').textContent='👋';
+        document.getElementById('endTitle').textContent='面试已结束';
+        document.getElementById('endMsg').textContent='本次还没有作答，未生成报告。可重新配置后再开始。';
+        reportTarget='配置页.html';
+        const gr=document.getElementById('goReport'); gr.textContent='返回重新配置'; gr.disabled=false;
+        return;
+      }
 
       // 保存问答记录
       localStorage.setItem('qaRecords', JSON.stringify(state.qaRecords));
@@ -821,28 +871,12 @@ ${qaText}
         document.getElementById('videoPanel').classList.remove('hidden');
         document.body.classList.add('video-active');
         startVideoPipeline(); // 所见即所录：预览/录制/AI分析都走处理后的画面
-        // 浏览器支持时录制视频；不支持录制时仍可进行视频回答
-        if('MediaRecorder' in window){
-          state.videoChunks = [];
-          const mimeType=getSupportedMime();
-          const recordStream=getProcessedStream(); // 录制 canvas 画面（含虚拟背景/美颜）+ 原始音频
-          state.videoRecorder = mimeType ? new MediaRecorder(recordStream, { mimeType }) : new MediaRecorder(recordStream);
-          state.videoRecorder.ondataavailable = e=>{ if(e.data.size>0) state.videoChunks.push(e.data); };
-          state.videoRecorder.start();
-          state.recordVideo = true;
-          document.getElementById('recBadge').classList.remove('hidden');
-          document.getElementById('recBadge').classList.add('flex');
-        }else{
-          state.recordVideo = false;
-          document.getElementById('recordHint').textContent='当前浏览器不支持录像保存，但可以继续视频回答';
-        }
         // 用同一个流的音频做语音识别
         state.mediaStream = state.videoStream;
         setupAnalyser(state.videoStream); setupRecognition();
-        if(cfg.input==='video') document.getElementById('recordHint').textContent='视频已开启，点击麦克风开始回答，停止后自动发送';
         localStorage.removeItem('videoUrl'); localStorage.removeItem('videoPath');
-        startFrameSampling(); // 采样关键帧供报告页分析镜头表现
-        closeVideoModal(); startFlow();
+        // 不立刻录制、不立刻开始答题：先进入「出镜设置」让用户调整美颜/背景，点击开始后才真正启动
+        closeVideoModal(); enterSetupMode();
       } catch(err){
         errorEl.classList.remove('hidden');
         errorEl.textContent=mediaErrorMessage(err);
@@ -875,6 +909,50 @@ ${qaText}
       return '';
     }
     function closeVideoModal(){ document.getElementById('videoModal').classList.add('hidden'); }
+
+    /* ===== 面试前出镜设置：先预览美颜/背景，确认后再录制并开始 ===== */
+    function enterSetupMode(){
+      const panel=document.getElementById('videoPanel');
+      // 临时放大视频窗，方便预览效果
+      panel.dataset.prevW=panel.style.width; panel.dataset.prevH=panel.style.height;
+      panel.style.width='360px'; panel.style.height='330px';
+      document.getElementById('setupBackdrop').classList.remove('hidden');
+      document.getElementById('prepBar').classList.remove('hidden');
+      document.getElementById('recordHint').textContent='调整好出镜效果后，点击「开始面试」';
+    }
+    function exitSetupMode(){
+      const panel=document.getElementById('videoPanel');
+      if(panel.dataset.prevW){ panel.style.width=panel.dataset.prevW; }
+      if(panel.dataset.prevH){ panel.style.height=panel.dataset.prevH; }
+      document.getElementById('setupBackdrop').classList.add('hidden');
+      document.getElementById('prepBar').classList.add('hidden');
+    }
+    document.getElementById('startInterviewBtn').addEventListener('click', ()=>{
+      // 录制在点击开始后才启动，避免把设置过程录进去
+      if('MediaRecorder' in window && state.videoStream){
+        try{
+          state.videoChunks = [];
+          const mimeType=getSupportedMime();
+          const recordStream=getProcessedStream(); // 录制 canvas 画面（含虚拟背景/美颜）+ 原始音频
+          state.videoRecorder = mimeType ? new MediaRecorder(recordStream, { mimeType }) : new MediaRecorder(recordStream);
+          state.videoRecorder.ondataavailable = e=>{ if(e.data.size>0) state.videoChunks.push(e.data); };
+          state.videoRecorder.start();
+          state.recordVideo = true;
+          document.getElementById('recBadge').classList.remove('hidden');
+          document.getElementById('recBadge').classList.add('flex');
+        }catch(e){
+          state.recordVideo = false;
+          document.getElementById('recordHint').textContent='当前浏览器不支持录像保存，但可以继续视频回答';
+        }
+      }else{
+        state.recordVideo = false;
+        document.getElementById('recordHint').textContent='当前浏览器不支持录像保存，但可以继续视频回答';
+      }
+      if(cfg.input==='video') document.getElementById('recordHint').textContent='视频已开启，点击麦克风开始回答，停止后自动发送';
+      startFrameSampling(); // 采样关键帧供报告页分析镜头表现
+      exitSetupMode();
+      startFlow();
+    });
     document.querySelectorAll('[data-video-size]').forEach(btn=>btn.addEventListener('click',()=>{
       const panel=document.getElementById('videoPanel');
       if(btn.dataset.videoSize==='small'){panel.style.width='240px';panel.style.height='210px';}
@@ -1045,17 +1123,23 @@ ${qaText}
       document.getElementById('videoModalDesc').innerHTML='视频回答需要访问你的<b>摄像头和麦克风</b>，面试过程中会显示本人画面并使用语音作答。';
       document.getElementById('videoModalNote').textContent='登录用户可在历史记录中回放录制内容。请勿录制敏感信息。';
       document.getElementById('noRecordBtn').textContent='改用语音回答';
-      document.getElementById('agreeRecordBtn').textContent='开启视频并开始';
+      document.getElementById('agreeRecordBtn').textContent='开启摄像头并预览';
       document.getElementById('videoModal').classList.remove('hidden');
       document.getElementById('videoModal').classList.add('flex');
     }
 
     /* ===== 启动 ===== */
     function startFlow(){
+      state.started=true; // 面试正式开始：用于刷新/离开保护
       if(state.inputMode==='text'){ document.getElementById('voiceMode').classList.add('hidden'); document.getElementById('textMode').classList.remove('hidden'); }
       startTimer();
       deliverFirstQuestion();
     }
+
+    // 面试进行中刷新/关闭页面会丢失进度，给出浏览器原生确认（结束面试跳转时 finished=true，不会拦截）
+    window.addEventListener('beforeunload', (e)=>{
+      if(state.started && !finished && state.qaRecords.length < TOTAL_QUESTIONS){ e.preventDefault(); e.returnValue=''; }
+    });
     async function startWithoutVideo(){
       if(state.inputMode==='voice'){
         try{
