@@ -478,40 +478,65 @@ ${qaText}
       generateReport();
     }
 
+    // 右下角保存状态提示（saving/ok/info 轻量，error 常驻并带「重试」）
+    function showSaveToast(kind, text, onRetry){
+      let el=document.getElementById('saveToast');
+      if(!el){ el=document.createElement('div'); el.id='saveToast'; document.body.appendChild(el); }
+      const styles={ saving:'bg-white text-gray-600 border border-gray-200', ok:'bg-brandgreen/10 text-brandgreen border border-brandgreen/30', error:'bg-brandorange/10 text-brandorange border border-brandorange/40', info:'bg-white text-gray-600 border border-gray-200' };
+      el.className='fixed bottom-4 right-4 z-50 max-w-xs rounded-xl shadow-lg px-4 py-3 text-sm flex items-center gap-2 '+(styles[kind]||styles.info);
+      el.innerHTML=`<span>${escapeHtml(text)}</span>`;
+      if(onRetry){ const b=document.createElement('button'); b.textContent='重试'; b.className='ml-1 underline font-medium whitespace-nowrap'; b.onclick=onRetry; el.appendChild(b); }
+      el.classList.remove('hidden');
+      clearTimeout(el._t);
+      if(kind==='ok'||kind==='info') el._t=setTimeout(()=>el.classList.add('hidden'), 4500);
+    }
+    function saveLocalHistory(record){
+      try{
+        const history = JSON.parse(localStorage.getItem('interviewHistory') || '[]');
+        history.unshift(record);
+        localStorage.setItem('interviewHistory', JSON.stringify(history.slice(0,20)));
+      }catch(e){ /* localStorage 不可用时忽略 */ }
+    }
+
+    let cloudSaved = false; // 防止失败重试时重复写入本地兜底
     async function saveToCloud(result){
       if(isViewMode) return;
       let total=0; DIMENSIONS.forEach(d=> total+=(result.scores[d.key]||0)*d.weight/100); total=total.toFixed(1);
-      try {
-        const { data: { user } } = await sb.auth.getUser();
-        // 私有桶：video_url 字段存储路径（如 uid/时间戳.webm），回放时签名
-        const videoRef = localStorage.getItem('videoPath') || localStorage.getItem('videoUrl') || null;
-        if (user) {
-          const row = {
-            user_id: user.id,
-            job_name: jobName,
-            level_name: levelName,
-            type_list: [meta.roundName, meta.typeList || '综合面试'].filter(Boolean).join(' · '),
-            total_score: parseFloat(total),
-            scores: result.scores,
-            qa_records: qaRecords,
-            report: result,
-            video_url: videoRef
-          };
-          let { error } = await sb.from('interview_records').insert(row);
-          if(error && /video_url/i.test(error.message||'')){
-            // 兼容旧表结构：缺少 video_url 列时去掉该字段重试，至少保住报告与评分（请执行 setup.sql 补列）
-            console.warn('interview_records 缺少 video_url 列，降级保存。请在 Supabase 执行 setup.sql 补列。', error);
-            delete row.video_url;
-            ({ error } = await sb.from('interview_records').insert(row));
-          }
-          if(error) console.warn('云端保存失败:', error); else console.log('✅ 已保存到云端', videoRef?('（含录像 '+videoRef+'）'):'');
-        } else {
-          const history = JSON.parse(localStorage.getItem('interviewHistory') || '[]');
-          history.unshift({ date:new Date().toLocaleString('zh-CN'), jobName, levelName, typeList:[meta.roundName, meta.typeList||'综合面试'].filter(Boolean).join(' · '), totalScore:parseFloat(total), scores:result.scores, qaRecords, report:result, video_url:videoRef });
-          localStorage.setItem('interviewHistory', JSON.stringify(history.slice(0,20)));
-        }
+      // 私有桶：video_url 字段存储路径（如 uid/时间戳.webm），回放时签名
+      const videoRef = localStorage.getItem('videoPath') || localStorage.getItem('videoUrl') || null;
+      const localRecord = { date:new Date().toLocaleString('zh-CN'), jobName, levelName, typeList:[meta.roundName, meta.typeList||'综合面试'].filter(Boolean).join(' · '), totalScore:parseFloat(total), scores:result.scores, qaRecords, report:result, video_url:videoRef };
+
+      let user=null;
+      try { ({ data:{ user } } = await sb.auth.getUser()); } catch(e){ /* 取用户失败按未登录处理 */ }
+
+      if(!user){
+        // 未登录：仅保存在本浏览器
+        saveLocalHistory(localRecord);
         localStorage.removeItem('videoUrl'); localStorage.removeItem('videoPath');
-      } catch(e){ console.warn('保存异常', e); }
+        showSaveToast('info','本次记录已存在此浏览器，登录后可云端永久保存并跨设备查看。');
+        return;
+      }
+
+      // 登录：写云端
+      showSaveToast('saving','正在保存到历史记录…');
+      const row = { user_id:user.id, job_name:jobName, level_name:levelName, type_list:localRecord.typeList, total_score:parseFloat(total), scores:result.scores, qa_records:qaRecords, report:result, video_url:videoRef };
+      try{
+        let { error } = await sb.from('interview_records').insert(row);
+        if(error && /video_url/i.test(error.message||'')){
+          // 兼容旧表结构：缺 video_url 列时去掉该字段重试，至少保住报告与评分（请执行 setup.sql 补列）
+          console.warn('interview_records 缺少 video_url 列，降级保存。请在 Supabase 执行 setup.sql 补列。', error);
+          delete row.video_url;
+          ({ error } = await sb.from('interview_records').insert(row));
+        }
+        if(error) throw error;
+        cloudSaved = true;
+        localStorage.removeItem('videoUrl'); localStorage.removeItem('videoPath');
+        showSaveToast('ok','✅ 已保存到历史记录'+(videoRef?'（含录像）':''));
+      }catch(e){
+        console.warn('云端保存失败:', e);
+        if(!cloudSaved) saveLocalHistory(localRecord); // 兜底：先存本地，避免完全丢失（保留 videoPath 以便重试上传引用）
+        showSaveToast('error','⚠️ 云端保存失败，已暂存到此浏览器。', ()=>saveToCloud(result));
+      }
     }
 
     function renderReport(result){
