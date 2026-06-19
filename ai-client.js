@@ -20,15 +20,36 @@ window.AIProxy = (function () {
     return ANON_KEY;
   }
 
+  // 各服务的前端超时（毫秒）。略高于服务端上游 90s，确保通常能拿到真实结果/错误；
+  // 一旦网络挂起也能在有限时间内失败，避免界面无限停在"思考中"。
+  const TIMEOUTS = { chat: 100000, vision: 100000, asr: 60000, tts: 45000, quota: 15000 };
+
   async function call(service, payload) {
-    const res = await fetch(FUNCTIONS_URL, {
-      method: "POST",
-      headers: {
-        Authorization: "Bearer " + getAccessToken(),
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ service, payload }),
-    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUTS[service] || 60000);
+    let res;
+    try {
+      res = await fetch(FUNCTIONS_URL, {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + getAccessToken(),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ service, payload }),
+        signal: controller.signal,
+      });
+    } catch (e) {
+      if (e && e.name === "AbortError") {
+        const err = new Error("AI 服务响应超时，请检查网络后重试");
+        err.status = 0; err.timeout = true;
+        throw err;
+      }
+      const err = new Error("网络连接失败，请检查网络后重试");
+      err.status = 0; err.network = true;
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       const err = new Error(data.error || "AI 服务请求失败(" + res.status + ")");
