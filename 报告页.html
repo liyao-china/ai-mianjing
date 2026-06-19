@@ -328,7 +328,8 @@
       if(!result.scores || required.some(k=>!Number.isFinite(Number(result.scores[k])))) throw new Error('评分维度不完整');
       result.scores=Object.fromEntries(required.map(k=>[k,Math.max(0,Math.min(100,Number(result.scores[k])))]));
       result.suggestions=Array.isArray(result.suggestions)?result.suggestions.slice(0,3):[];
-      result.questions=Array.isArray(result.questions)?result.questions.slice(0,qaRecords.length):[];
+      // 始终对齐到实际答题数：AI 少返回时补齐占位，避免后几题被静默吞掉
+      result.questions=normalizeQuestionRows(result.questions);
       result.bonus=Array.isArray(result.bonus)?result.bonus.slice(0,6):[];
       result.penalty=Array.isArray(result.penalty)?result.penalty.slice(0,6):[];
       return result;
@@ -336,6 +337,21 @@
 
     function escapeHtml(value){
       return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    // 让逐题点评始终与实际答题数一一对应：AI 多返回则截断，少返回则补占位（分数置空，标记 missing）
+    // 兼容三种入口（即时生成 / 历史回放 / 示例），renderReport 与 parseReport 都用它，幂等可重复调用
+    function normalizeQuestionRows(rawQuestions){
+      const raw = Array.isArray(rawQuestions) ? rawQuestions : [];
+      return qaRecords.map((_, i) => {
+        const q = raw[i];
+        if(q && typeof q === 'object'){
+          const n = Number(q.score);
+          const score = Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : null;
+          return { score, good: Array.isArray(q.good)?q.good:[], bad: Array.isArray(q.bad)?q.bad:[] };
+        }
+        return { score:null, good:[], bad:[], missing:true };
+      });
     }
 
     async function generateReport(attempt=0){
@@ -356,7 +372,7 @@ ${qaText}
 - 隐性加分（如：用数据/事实说话、对自身不足坦诚且有改进计划、谈吐自信不傲慢、回答有结构、做过功课了解岗位/公司）；
 - 隐性减分（如：贬低前公司/前同事、明显在背模板套话、对成果含糊其辞疑似注水、态度傲慢或过度自卑、答非所问、前后矛盾）。
 没有明显证据的就返回空数组，不要硬凑、不要编造。
-【要求】每个维度0-100分；给3条整体改进建议；每题给得分(0-100)、1-2条亮点、1-2条改进点；严格客观。
+【要求】每个维度0-100分；给3条整体改进建议；questions 数组必须严格按题目顺序、每道题对应一项（共 ${qaRecords.length} 题就返回 ${qaRecords.length} 项，不可合并或省略任何一题），每项给得分(0-100)、1-2条亮点、1-2条改进点；严格客观。
 【必须严格按以下JSON格式返回，不要任何其他文字，不要markdown代码块】
 {"scores":{"jobMatch":数字,"logic":数字,"fluency":数字,"depth":数字,"confidence":数字,"value":数字},"overallComment":"一句话评价(50字内)","suggestions":["建议1","建议2","建议3"],"questions":[{"score":数字,"good":["亮点"],"bad":["改进"]}],"bonus":["隐性加分信号"],"penalty":["隐性减分信号"]}`;
 
@@ -532,10 +548,16 @@ ${qaText}
         el.innerHTML=`<div class="w-6 h-6 rounded-full gradient-btn text-white text-xs flex items-center justify-center flex-shrink-0">${i+1}</div><div class="flex-1 text-sm text-gray-700">${escapeHtml(s)}</div><button class="text-xs text-indigo hover:underline whitespace-nowrap" onclick="location.href='配置页.html'">专项练习 →</button>`; sg.appendChild(el); });
 
       const qList=document.getElementById('questionList'); qList.innerHTML='';
-      (result.questions||[]).forEach((item,idx)=>{ const rec=qaRecords[idx]||{}; const sc=item.score||0;
-        const color=sc>=80?'#10B981':sc>=60?'#6366F1':'#F59E0B';
+      normalizeQuestionRows(result.questions).forEach((item,idx)=>{ const rec=qaRecords[idx]||{};
+        const sc=item.score;
+        const scoreText=(sc===null||sc===undefined)?'—':sc;
+        const color=(sc===null||sc===undefined)?'#9CA3AF':(sc>=80?'#10B981':sc>=60?'#6366F1':'#F59E0B');
+        const hasDetail=(item.good&&item.good.length)||(item.bad&&item.bad.length);
+        const detailHtml=hasDetail
+          ? `<div class="grid md:grid-cols-2 gap-4 mb-4"><div><div class="text-xs font-semibold text-brandgreen mb-2">✅ 亮点</div><ul class="space-y-1.5">${(item.good||[]).map(g=>`<li class="text-sm text-gray-600 flex gap-1.5"><span class="text-brandgreen">·</span>${escapeHtml(g)}</li>`).join('')}</ul></div><div><div class="text-xs font-semibold text-brandorange mb-2">⚠️ 改进点</div><ul class="space-y-1.5">${(item.bad||[]).map(b=>`<li class="text-sm text-gray-600 flex gap-1.5"><span class="text-brandorange">·</span>${escapeHtml(b)}</li>`).join('')}</ul></div></div>`
+          : `<div class="mb-4 text-sm text-gray-500 bg-gray-50 rounded-xl p-3 leading-relaxed">本题未单独生成详细点评，可参考整体评价，或点击下方「好答案 vs 差答案」示范获取针对性建议。</div>`;
         const card=document.createElement('div'); card.className='bg-white rounded-2xl shadow-soft overflow-hidden';
-        card.innerHTML=`<div class="flex items-center justify-between p-5 cursor-pointer toggle-head"><div class="flex items-center gap-3 flex-1"><span class="text-xs text-gray-400">Q${idx+1}</span>${rec.roundName?`<span class="text-[10px] bg-indigo/10 text-indigo px-1.5 py-0.5 rounded whitespace-nowrap">${escapeHtml(rec.roundName)}</span>`:''}<span class="text-sm font-medium text-gray-700">${escapeHtml(rec.question||'')}</span></div><div class="flex items-center gap-3"><span class="text-lg font-bold" style="color:${color}">${sc}</span><span class="toggle-icon text-gray-400 transition-transform">▼</span></div></div><div class="toggle-body hidden px-5 pb-5 border-t border-gray-50 pt-4"><div class="grid md:grid-cols-2 gap-4 mb-4"><div><div class="text-xs font-semibold text-brandgreen mb-2">✅ 亮点</div><ul class="space-y-1.5">${(item.good||[]).map(g=>`<li class="text-sm text-gray-600 flex gap-1.5"><span class="text-brandgreen">·</span>${escapeHtml(g)}</li>`).join('')}</ul></div><div><div class="text-xs font-semibold text-brandorange mb-2">⚠️ 改进点</div><ul class="space-y-1.5">${(item.bad||[]).map(b=>`<li class="text-sm text-gray-600 flex gap-1.5"><span class="text-brandorange">·</span>${escapeHtml(b)}</li>`).join('')}</ul></div></div><div><div class="text-xs font-semibold text-gray-500 mb-2">📝 你的回答</div><div class="bg-gray-50 rounded-xl p-4 text-sm text-gray-600 leading-relaxed">${escapeHtml(rec.answer||'')}</div></div><div class="mt-4"><button class="gva-btn text-xs px-3 py-1.5 rounded-lg border border-indigo/30 text-indigo hover:bg-indigo/5 transition font-medium">🆚 看「好答案 vs 差答案」示范</button><div class="gva-slot hidden mt-3"></div></div></div>`;
+        card.innerHTML=`<div class="flex items-center justify-between p-5 cursor-pointer toggle-head"><div class="flex items-center gap-3 flex-1"><span class="text-xs text-gray-400">Q${idx+1}</span>${rec.roundName?`<span class="text-[10px] bg-indigo/10 text-indigo px-1.5 py-0.5 rounded whitespace-nowrap">${escapeHtml(rec.roundName)}</span>`:''}<span class="text-sm font-medium text-gray-700">${escapeHtml(rec.question||'')}</span></div><div class="flex items-center gap-3"><span class="text-lg font-bold" style="color:${color}">${scoreText}</span><span class="toggle-icon text-gray-400 transition-transform">▼</span></div></div><div class="toggle-body hidden px-5 pb-5 border-t border-gray-50 pt-4">${detailHtml}<div><div class="text-xs font-semibold text-gray-500 mb-2">📝 你的回答</div><div class="bg-gray-50 rounded-xl p-4 text-sm text-gray-600 leading-relaxed">${escapeHtml(rec.answer||'')}</div></div><div class="mt-4"><button class="gva-btn text-xs px-3 py-1.5 rounded-lg border border-indigo/30 text-indigo hover:bg-indigo/5 transition font-medium">🆚 看「好答案 vs 差答案」示范</button><div class="gva-slot hidden mt-3"></div></div></div>`;
         qList.appendChild(card);
         const head=card.querySelector('.toggle-head'),body=card.querySelector('.toggle-body'),icon=card.querySelector('.toggle-icon');
         head.addEventListener('click',()=>{ body.classList.toggle('hidden'); icon.style.transform=body.classList.contains('hidden')?'rotate(0)':'rotate(180deg)'; });
