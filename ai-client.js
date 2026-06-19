@@ -4,8 +4,10 @@
  * 登录用户自动携带会话令牌（享更高每日额度），匿名用户按 IP 限额。
  */
 window.AIProxy = (function () {
-  const FUNCTIONS_URL = "https://skxpfgqylfpavoiurfhr.supabase.co/functions/v1/ai-proxy";
-  const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNreHBmZ3F5bGZwYXZvaXVyZmhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0NjE5NTYsImV4cCI6MjA5NjAzNzk1Nn0._UcR6vWOppvwcqYaHFqIlKJrADRaRZDOpBDLIdPXncY";
+  // 优先用 supabase-config.js 提供的统一配置；保留字面量兜底，确保未加载 config 的页面也能工作
+  const SB_URL = (typeof window !== "undefined" && window.SUPABASE_URL) || "https://skxpfgqylfpavoiurfhr.supabase.co";
+  const FUNCTIONS_URL = SB_URL + "/functions/v1/ai-proxy";
+  const ANON_KEY = (typeof window !== "undefined" && window.SUPABASE_KEY) || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNreHBmZ3F5bGZwYXZvaXVyZmhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0NjE5NTYsImV4cCI6MjA5NjAzNzk1Nn0._UcR6vWOppvwcqYaHFqIlKJrADRaRZDOpBDLIdPXncY";
 
   function getAccessToken() {
     try {

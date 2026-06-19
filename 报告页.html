@@ -7,6 +7,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
   <script src="ai-client.js"></script>
   <script>
     tailwind.config = { theme: { extend: {
@@ -155,8 +156,8 @@
 
   <script>
     /* ============ Supabase ============ */
-    const SUPABASE_URL = "https://skxpfgqylfpavoiurfhr.supabase.co";
-    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNreHBmZ3F5bGZwYXZvaXVyZmhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0NjE5NTYsImV4cCI6MjA5NjAzNzk1Nn0._UcR6vWOppvwcqYaHFqIlKJrADRaRZDOpBDLIdPXncY";
+    const SUPABASE_URL = window.SUPABASE_URL;
+    const SUPABASE_KEY = window.SUPABASE_KEY;
     const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     /* ============ AI 调用统一走 AIProxy（ai-client.js），前端无模型密钥 ============ */
     const VIDEO_BUCKET = "interview-videos";
@@ -639,8 +640,9 @@ ${answer?`【候选人本次的回答（可参考其薄弱处，但不要照抄�
         slot.dataset.loaded='1'; slot.classList.remove('hidden');
         btn.textContent='🆚 收起 / 展开示范';
       }catch(err){
-        slot.innerHTML=`<div class="text-sm text-brandorange">生成失败，请重试：${escapeHtml(err.message||'未知错误')}</div>`;
+        slot.innerHTML=`<div class="text-sm text-brandorange">生成失败：${escapeHtml(err.message||'未知错误')} <button class="gva-retry ml-1 underline font-medium">点此重试</button></div>`;
         slot.classList.remove('hidden'); btn.textContent=old;
+        slot.querySelector('.gva-retry')?.addEventListener('click',()=>{ if(btn.disabled) return; genGoodBadAnswer(question, answer, btn, slot); });
       }
       btn.disabled=false;
     }

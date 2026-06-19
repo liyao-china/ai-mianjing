@@ -6,6 +6,7 @@
   <title>登录 / 注册 - AI面镜</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
   <script>
     tailwind.config = { theme: { extend: {
       colors: { indigo: { DEFAULT: '#6366F1' }, brandgreen: '#10B981', brandorange: '#F59E0B' },
@@ -66,8 +67,8 @@
 
     <script>
     /* ============ 填你的 Supabase 信息 ============ */
-    const SUPABASE_URL = "https://skxpfgqylfpavoiurfhr.supabase.co";
-    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNreHBmZ3F5bGZwYXZvaXVyZmhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0NjE5NTYsImV4cCI6MjA5NjAzNzk1Nn0._UcR6vWOppvwcqYaHFqIlKJrADRaRZDOpBDLIdPXncY";
+    const SUPABASE_URL = window.SUPABASE_URL;
+    const SUPABASE_KEY = window.SUPABASE_KEY;
     /* ============================================ */
 
     const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
