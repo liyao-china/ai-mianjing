@@ -161,22 +161,31 @@
     const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     /* ============ AI 调用统一走 AIProxy（ai-client.js），前端无模型密钥 ============ */
     const VIDEO_BUCKET = "interview-videos";
-    // ⭐ 镜头分析功能开关：暂时封存，规划为会员专属功能；上线时与面试页的 ENABLE_VIDEO_ANALYSIS 一起改为 true
-    const ENABLE_VIDEO_ANALYSIS = false;
+    // ⭐ 镜头分析功能开关：会员专属，规划中。统一由 supabase-config.js 的 window.ENABLE_VIDEO_ANALYSIS 控制
+    const ENABLE_VIDEO_ANALYSIS = window.ENABLE_VIDEO_ANALYSIS === true;
 
     // 私有桶视频：存储的是路径，回放时签发1小时有效的签名链接；旧记录的 http 链接直接使用
     let currentVideo = { ref:null, recordId:null };
     let radarChartInstance = null; // 复用同一 canvas，重渲染前需销毁旧实例
-    function showVideoMsg(msg){
+    // msg 为空则隐藏；传 retryFn 时附带一个「重新加载录像」按钮，让用户无需刷新整页即可重签链接
+    function showVideoMsg(msg, retryFn){
       const el=document.getElementById('videoMsg');
-      if(!msg){ el.classList.add('hidden'); return; }
+      if(!msg){ el.classList.add('hidden'); el.innerHTML=''; return; }
       el.textContent=msg; el.classList.remove('hidden');
+      if(typeof retryFn==='function'){
+        const btn=document.createElement('button');
+        btn.textContent='🔄 重新加载录像';
+        btn.className='ml-2 underline font-medium text-indigo';
+        btn.addEventListener('click',()=>{ showVideoMsg(''); retryFn(); });
+        el.appendChild(btn);
+      }
     }
     async function showReplayVideo(value, opts={}){
       if(!value) return;
       currentVideo = { ref:value, recordId:opts.recordId||null };
       const section=document.getElementById('videoSection');
       const videoEl=document.getElementById('replayVideo');
+      const retry=()=>showReplayVideo(value, opts);
       let src = value;
       if(!/^https?:\/\//i.test(value)){
         try{
@@ -185,29 +194,30 @@
           if(error || !data?.signedUrl){
             console.warn('签名链接生成失败', error);
             section.classList.remove('hidden'); videoEl.classList.add('hidden');
-            showVideoMsg('录像加载失败：' + (error?.message || '可能未登录本人账号，或录像已被删除') + '。请确认已登录后刷新重试。');
+            showVideoMsg('录像加载失败：' + (error?.message || '可能未登录本人账号，或录像已被删除') + '。请确认已登录后重试。', retry);
             return;
           }
           src = data.signedUrl;
         }catch(e){
           console.warn('签名链接异常', e);
           section.classList.remove('hidden'); videoEl.classList.add('hidden');
-          showVideoMsg('录像加载异常，请稍后刷新重试。');
+          showVideoMsg('录像加载异常，请稍后重试。', retry);
           return;
         }
       }
       showVideoMsg('');
       section.classList.remove('hidden'); videoEl.classList.remove('hidden');
-      // 播放出错（多为签名链接过期）时，对私有路径自动重签一次
+      // 播放出错（多为签名链接过期）时，对私有路径自动重签一次；自动重签再失败则给手动重试按钮
       videoEl.onerror = async ()=>{
         const ref = currentVideo.ref;
-        if(!ref || /^https?:\/\//i.test(ref) || videoEl.dataset.resigned==='1') return;
+        if(!ref || /^https?:\/\//i.test(ref)) return;
+        if(videoEl.dataset.resigned==='1'){ showVideoMsg('录像链接已失效。', retry); return; }
         videoEl.dataset.resigned='1';
         try{
           const { data, error } = await sb.storage.from(VIDEO_BUCKET).createSignedUrl(ref, 86400);
           if(!error && data?.signedUrl){ videoEl.src = data.signedUrl; videoEl.load(); }
-          else { showVideoMsg('录像链接已失效，请刷新页面重试。'); }
-        }catch(_){ showVideoMsg('录像链接已失效，请刷新页面重试。'); }
+          else { showVideoMsg('录像链接已失效。', retry); }
+        }catch(_){ showVideoMsg('录像链接已失效。', retry); }
       };
       videoEl.dataset.resigned='';
       videoEl.src = src;
@@ -316,6 +326,9 @@
         // 历史回放视频（新记录为私有路径，旧记录为公开链接，均兼容）；云端记录带 id 以支持删除
         showReplayVideo(hist.video_url, { recordId: hist.id || null });
       } catch(e){ showError('历史报告读取失败：'+e.message); }
+    } else if ((()=>{ const u=new URLSearchParams(location.search).get('session'); const l=localStorage.getItem('currentSessionId'); return u && l && u!==l; })()) {
+      // 链接携带的会话ID与本地最新会话不一致：多为旧书签/过期链接，避免渲染串场的旧数据
+      showError('该报告链接已过期，或与当前最新的面试会话不一致。可在「历史成长」中查看既往报告，或重新开始一场面试。');
     } else {
       try { qaRecords = JSON.parse(localStorage.getItem('qaRecords')) || []; } catch(e){}
       try { meta = JSON.parse(localStorage.getItem('interviewMeta')) || {}; } catch(e){}

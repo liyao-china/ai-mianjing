@@ -69,6 +69,9 @@
         <span id="progressTip" class="text-xs text-gray-400">准备中</span>
       </div>
       <div class="flex gap-1.5" id="progressDots"></div>
+      <div id="reverseBanner" class="hidden mt-2 flex items-center gap-2 text-xs bg-indigo/5 text-indigo border border-indigo/15 rounded-lg px-3 py-2">
+        <span>🙋</span><span><b>反问环节</b>：面试官提问结束，现在轮到你向面试官提问——这也是被观察的一部分，建议问得有针对性。</span>
+      </div>
     </div>
   </header>
 
@@ -575,10 +578,23 @@ ${roleGuide ? roleGuide + '\n' : ''}
         state.lastQuestion=question; state.messages.push({role:'assistant',content:reply});
         state.aiThinking=false;
         if(status==='END'){ state.waitingAnswer=false; setInputEnabled(false); document.getElementById('progressTip').textContent='面试结束'; setTimeout(()=>finishInterview(),1200); return; }
-        if(status==='REVERSE'){ interviewPhase='reversing'; document.getElementById('progressTip').textContent='反问环节'; }
-        else { state.questionCount++; updateDots(); document.getElementById('progressTip').textContent='请回答'; }
+        const tip=document.getElementById('progressTip');
+        if(status==='REVERSE'){
+          interviewPhase='reversing';
+          tip.textContent='🙋 反问环节 · 现在轮到你提问';
+          tip.classList.add('text-indigo','font-semibold');
+          document.getElementById('reverseBanner')?.classList.remove('hidden');
+        } else {
+          state.questionCount++; updateDots();
+          tip.textContent='请回答';
+          tip.classList.remove('text-indigo','font-semibold');
+          document.getElementById('reverseBanner')?.classList.add('hidden');
+        }
         state.waitingAnswer=true; setInputEnabled(true);
-        if(state.inputMode==='voice' || state.inputMode==='video') document.getElementById('recordHint').textContent='点击麦克风开始回答，停止后自动发送';
+        if(state.inputMode==='voice' || state.inputMode==='video')
+          document.getElementById('recordHint').textContent = interviewPhase==='reversing'
+            ? '该你向面试官提问了：点击麦克风或切换文字，提出你关心的问题'
+            : '点击麦克风开始回答，停止后自动发送';
       }catch(err){
         state.aiThinking=false;
         removeThinking();
@@ -833,8 +849,8 @@ ${roleGuide ? roleGuide + '\n' : ''}
     document.getElementById('recordBtn').addEventListener('click',()=>{ if(!state.waitingAnswer) return; state.isRecording?stopRecording():startRecording(); });
 
     /* ===== 视频帧采样：供报告页 AI 分析镜头表现 ===== */
-    // ⭐ 功能开关：镜头表现分析（暂时封存，规划为会员专属功能；上线时与报告页的开关一起改为 true）
-    const ENABLE_VIDEO_ANALYSIS = false;
+    // ⭐ 功能开关：镜头表现分析（会员专属，规划中）。统一由 supabase-config.js 的 window.ENABLE_VIDEO_ANALYSIS 控制
+    const ENABLE_VIDEO_ANALYSIS = window.ENABLE_VIDEO_ANALYSIS === true;
     localStorage.removeItem('videoFrames'); // 清掉上一场残留
     const capturedFrames=[]; let frameTimerIds=[];
     function captureFrame(){
@@ -925,7 +941,10 @@ ${roleGuide ? roleGuide + '\n' : ''}
         return;
       }
 
-      // 保存问答记录
+      // 保存问答记录，并为本场报告生成会话ID：报告页据此校验链接是否对应当前最新会话，避免书签/刷新串到旧数据
+      const sessionId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (Date.now().toString(36)+Math.random().toString(16).slice(2));
+      localStorage.setItem('currentSessionId', sessionId);
+      reportTarget = '报告页.html?session=' + encodeURIComponent(sessionId);
       localStorage.setItem('qaRecords', JSON.stringify(state.qaRecords));
       localStorage.setItem('interviewMeta', JSON.stringify({ jobName, levelName, typeList, roundName }));
       localStorage.removeItem('currentInterviewReport');
