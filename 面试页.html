@@ -6,9 +6,9 @@
   <title>模拟面试中 - AI面镜</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <!-- tus 断点续传：大录像分片上传、弱网可续传（加载失败时自动回退标准上传） -->
-  <script src="https://cdn.jsdelivr.net/npm/tus-js-client@4/dist/tus.min.js"></script>
   <script src="supabase-config.js"></script>
+  <!-- 本地视频存储：录像只存用户本机(IndexedDB)，绝不上传云端 -->
+  <script src="media-store.js"></script>
   <script src="ai-client.js"></script>
   <!-- MediaPipe 人像分割：用于虚拟背景（锁定稳定版本，避免 latest 拉到不匹配的 wasm 导致静默失败） -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1675465747/selfie_segmentation.js" crossorigin="anonymous"></script>
@@ -130,7 +130,7 @@
       <div class="text-4xl mb-3">📹</div>
       <h3 id="videoModalTitle" class="text-xl font-bold mb-2">视频录制授权</h3>
       <p id="videoModalDesc" class="text-gray-500 text-sm mb-2">为了帮助你<b>赛后复盘</b>，本次面试可全程录制视频（含画面和声音）。</p>
-      <p id="videoModalNote" class="text-gray-400 text-xs mb-6">测试版录制会上传云端用于历史回放，请勿录制敏感内容。你也可以选择不录制。</p>
+        <p id="videoModalNote" class="text-gray-400 text-xs mb-6">🔒 录像<b>只保存在你本机的浏览器里，绝不会上传云端</b>，仅本设备可回放（清除浏览器数据 / 换设备 / 无痕模式将无法回放）。你也可以选择不录制。</p>
       <div class="flex gap-3">
         <button id="noRecordBtn" class="flex-1 py-2.5 rounded-xl border-2 border-gray-200 text-sm font-medium hover:border-gray-300 transition">不录制</button>
         <button id="agreeRecordBtn" class="flex-1 py-2.5 rounded-xl gradient-btn text-white text-sm font-medium">同意录制</button>
@@ -181,7 +181,6 @@
     const SUPABASE_URL = window.SUPABASE_URL;
     const SUPABASE_KEY = window.SUPABASE_KEY;
     const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    const VIDEO_BUCKET = "interview-videos";
     /* ================================== */
 
     const jobNames = {
@@ -245,6 +244,7 @@
     localStorage.removeItem('qaRecords');
     localStorage.removeItem('interviewMeta');
     localStorage.removeItem('currentInterviewReport');
+    localStorage.removeItem('videoLocalKey'); // 清掉上一场的本地录像引用，避免本场无录像时报告页串到旧录像
 
     let state = {
       inputMode: cfg.input || 'video',
@@ -478,7 +478,7 @@ ${roleGuide ? roleGuide + '\n' : ''}
       chatArea.appendChild(div); scrollBottom();
       return div;
     }
-    // 语音边说边把文字蹦出来；TTS 全失败时回退浏览器朗读 + 直接显示全文
+    // 文字立即打字机显示（不被语音合成阻塞），语音在后台逐句合成播放尽量与文字同步；TTS 全失败时回退浏览器朗读
     async function speakAndReveal(fullText){
       stopSpeaking();
       const seq = ttsSeq;
@@ -486,32 +486,41 @@ ${roleGuide ? roleGuide + '\n' : ''}
       const bubble = addAIBubbleEl();
       const textEl = bubble.querySelector('[data-ai-text]');
       const typingEl = bubble.querySelector('[data-ai-typing]');
+
+      // ① 文字立刻打字机显示，不再等待 TTS（即使语音很慢/失败，也能马上阅读题目）
+      let typed=0, typer=null;
+      const finalizeText=()=>{ if(typer){ clearInterval(typer); typer=null; } if(textEl) textEl.textContent=fullText; if(typingEl && typingEl.parentNode) typingEl.remove(); };
+      typer=setInterval(()=>{
+        if(seq!==ttsSeq){ finalizeText(); return; }
+        typed=Math.min(fullText.length, typed+1);
+        if(textEl) textEl.textContent=fullText.slice(0,typed);
+        scrollBottom();
+        if(typed>=fullText.length){ clearInterval(typer); typer=null; if(typingEl && typingEl.parentNode) typingEl.remove(); }
+      }, 26);
+
+      // ② 语音后台逐句合成+播放（best-effort，不阻塞文字）
       const sentences = splitSentences(fullText);
-      const showAll = ()=>{ if(textEl) textEl.textContent = fullText; if(typingEl) typingEl.remove(); };
-      let revealed='', anyAudio=false, i=0;
-      let nextUrlP = synthSentence(sentences[0]); // 预取第一句，缩短首字延迟
-      while(i < sentences.length){
-        if(seq !== ttsSeq){ showAll(); return; } // 被用户打断 → 直接显示全文
+      let anyAudio=false;
+      let nextUrlP = synthSentence(sentences[0]); // 预取第一句，缩短首声延迟
+      for(let i=0;i<sentences.length;i++){
+        if(seq!==ttsSeq){ finalizeText(); return; } // 被用户打断
         const url = await nextUrlP;
-        if(seq !== ttsSeq){ showAll(); return; }
-        nextUrlP = (i+1<sentences.length) ? synthSentence(sentences[i+1]) : Promise.resolve(null); // 流水线预取下一句
-        const revealThis = ()=>{ revealed += sentences[i]; if(seq===ttsSeq && textEl){ textEl.textContent=revealed; scrollBottom(); } };
+        if(seq!==ttsSeq){ finalizeText(); return; }
+        nextUrlP = (i+1<sentences.length) ? synthSentence(sentences[i+1]) : Promise.resolve(null);
         if(url){
           anyAudio=true;
           await new Promise(resolve=>{
             ttsAudio = new Audio(url);
             let done=false; const finish=()=>{ if(!done){ done=true; resolve(); } };
-            ttsAudio.onplay = revealThis;          // 声音一响就出这句字
             ttsAudio.onended = finish;
-            ttsAudio.onerror = ()=>{ revealThis(); finish(); };
-            ttsAudio.play().catch(()=>{ revealThis(); finish(); });
+            ttsAudio.onerror = finish;
+            ttsAudio.play().catch(finish);
           });
-        } else { revealThis(); }
-        i++;
+        }
       }
-      if(typingEl) typingEl.remove();
-      if(!anyAudio && seq===ttsSeq){
-        showAll();
+      if(seq!==ttsSeq){ finalizeText(); return; }
+      finalizeText();
+      if(!anyAudio){
         const canBrowserTTS = ('speechSynthesis' in window);
         if(canBrowserTTS) speakFallback(fullText); // 在线合成全失败 → 浏览器朗读兜底
         if(!ttsWarned){
@@ -522,7 +531,6 @@ ${roleGuide ? roleGuide + '\n' : ''}
           bubble.querySelector('.max-w-\\[80\\%\\]')?.appendChild(note);
         }
       }
-      else showAll();
     }
 
     async function callAI(messages){
@@ -707,6 +715,9 @@ ${roleGuide ? roleGuide + '\n' : ''}
       const SR=window.SpeechRecognition||window.webkitSpeechRecognition; if(!SR) return;
       state.recognition=new SR(); state.recognition.lang='zh-CN'; state.recognition.continuous=true; state.recognition.interimResults=true;
       state.recognition.onresult=(e)=>{ let final='',interim=''; for(let i=e.resultIndex;i<e.results.length;i++){ const t=e.results[i][0].transcript; if(e.results[i].isFinal) final+=t; else interim+=t; } if(final) state.transcript+=final; state.liveTranscript=state.transcript+interim; updateLiveUserBubble(state.liveTranscript); };
+      // Chrome 的语音识别约 1 分钟静音/超时会自动停止；只要仍在录音就自动重启，避免长回答说到一半实时字幕冻住
+      state.recognition.onend=()=>{ if(state.isRecording){ try{ state.recognition.start(); }catch(e){ /* 偶发 already started，忽略 */ } } };
+      state.recognition.onerror=(e)=>{ if(e && (e.error==='no-speech'||e.error==='audio-capture'||e.error==='network')){ /* 交给 onend 自动重启 */ } };
     }
     /* ===== 回答录音器：浏览器语音识别不可用时（国内 Chrome 常见），用云端 ASR 转写兜底 ===== */
     let answerRecorder=null, answerChunks=[];
@@ -732,6 +743,41 @@ ${roleGuide ? roleGuide + '\n' : ''}
     }
     function blobToDataURL(blob){
       return new Promise((resolve,reject)=>{ const r=new FileReader(); r.onload=()=>resolve(r.result); r.onerror=reject; r.readAsDataURL(blob); });
+    }
+
+    /* ===== ASR 动态热词：把岗位/当前问题/简历&JD 里的专有名词喂给识别模型，显著减少同音字与术语错误 ===== */
+    function buildAsrContext(){
+      const parts=[];
+      parts.push(`这是一段中文求职面试的口语回答，可能中英混说。应聘岗位：${jobName}（${levelName}级别）。请优先按下列上下文中的专有名词与术语进行识别。`);
+      if(state.lastQuestion) parts.push(`面试官刚问的问题：${String(state.lastQuestion).replace(/\s+/g,' ').slice(0,140)}`);
+      const corpus=`${resumeInfo||''} ${jdInfo||''}`;
+      // 英文/技术词（去重）
+      const eng=[...new Set((corpus.match(/[A-Za-z][A-Za-z0-9+.#/]{1,}/g)||[]))].slice(0,40);
+      if(eng.length) parts.push(`相关英文/技术词：${eng.join('、')}`);
+      // 简历/JD 片段（中文专有名词的语境来源）
+      const zhSnippet=(resumeInfo||'').replace(/\s+/g,' ').slice(0,200);
+      if(zhSnippet) parts.push(`候选人背景关键词：${zhSnippet}`);
+      parts.push('常见词汇：产品经理、运营、算法、工程师、大模型、提示词、RAG、Agent、智能体、多模态、微调、向量数据库、用户增长、数据驱动、需求分析、项目复盘、KPI、ROI、A/B测试、Python、SQL、API、字节跳动、阿里、腾讯、米哈游、实习、校招。');
+      return parts.join('\n').slice(0,790); // 边缘函数按 800 截断
+    }
+
+    /* ===== ASR 同音字纠错：用对话模型按面试上下文只纠正明显的同音字/分词/标点，不改语义、不补内容；失败或超时回退原文 ===== */
+    async function correctTranscript(raw){
+      const text=(raw||'').trim();
+      if(text.length<6) return text; // 太短不值得纠错
+      const sys='你是中文语音转写的纠错助手。只修正明显的同音字错误、错误分词和标点，使句子通顺。严禁改变原意、严禁增删信息、严禁回答或续写。直接输出纠正后的纯文本，不要任何解释或引号。';
+      const ctx=`面试岗位：${jobName}（${levelName}）。${state.lastQuestion?('面试官问题：'+String(state.lastQuestion).slice(0,120)+'。'):''}`;
+      const usr=`${ctx}\n下面是候选人回答的语音转写（可能有同音字错误），请纠错后原样输出：\n${text}`;
+      try{
+        const p=AIProxy.chat([{role:'system',content:sys},{role:'user',content:usr}]);
+        const timeout=new Promise(res=>setTimeout(()=>res(null),12000)); // 最多等 12s，避免拖慢提交
+        const out=await Promise.race([p,timeout]);
+        const cleaned=(out||'').trim().replace(/^["'「『]|["'」』]$/g,'').trim();
+        // 纠错结果异常（空、过长爆炸、明显跑偏）则回退原文
+        if(!cleaned) return text;
+        if(cleaned.length > text.length*1.6 + 20) return text;
+        return cleaned;
+      }catch(e){ console.warn('ASR 纠错失败，使用原文', e); return text; }
     }
 
     function startRecording(){
@@ -760,20 +806,26 @@ ${roleGuide ? roleGuide + '\n' : ''}
       const browserText=(state.liveTranscript||state.transcript).trim();
       const hint=document.getElementById('recordHint');
       // ⭐ 优先用云端 qwen ASR（比浏览器自带识别准很多，尤其专业术语/中英混说）；失败再退回浏览器识别
+      const asrCtx=buildAsrContext();
       if(audioBlob && audioBlob.size>2000){
         try{
           let text='';
           if(audioBlob.size > ASR_SEG_THRESHOLD){
-            // 超阈值的长录音：解码→重采样→按时长切片→逐段转写→拼接，规避单次大小上限
+            // 超阈值的长录音：解码→重采样→按时长切片→并行转写→拼接，规避单次大小上限
             hint.textContent='录音较长，正在分段转写…';
             updateLiveUserBubble(browserText || '（正在分段转写录音…）');
-            text=(await transcribeLargeAudio(audioBlob,(i,n)=>{ hint.textContent=`录音较长，正在分段转写… (${i}/${n})`; })).trim();
+            text=(await transcribeLargeAudio(audioBlob,(i,n)=>{ hint.textContent=`录音较长，正在分段转写… (${i}/${n})`; },asrCtx)).trim();
           } else {
             hint.textContent='AI 正在转写你的回答，请稍候…';
             updateLiveUserBubble(browserText || '（AI 正在转写录音…）');
-            text=((await AIProxy.asr(await blobToDataURL(audioBlob)))||'').trim();
+            text=((await AIProxy.asr(await blobToDataURL(audioBlob), asrCtx))||'').trim();
           }
-          if(text){ submitAnswer(text); return; }
+          if(text){
+            hint.textContent='正在校对识别结果…';
+            updateLiveUserBubble(text); // 先显示原始识别，纠错后再覆盖
+            const corrected=await correctTranscript(text);
+            submitAnswer(corrected); return;
+          }
         }catch(e){ console.warn('云端转写失败，回退浏览器识别', e); }
       }
       if(browserText){ submitAnswer(browserText); return; } // 云端不可用时的兜底
@@ -829,21 +881,32 @@ ${roleGuide ? roleGuide + '\n' : ''}
       return out;
     }
 
-    async function transcribeLargeAudio(blob, onProgress){
+    const ASR_SEG_CONCURRENCY = 3; // 并行转写的分段数（兼顾速度与上游限流）
+    async function transcribeLargeAudio(blob, onProgress, context){
       const pcm = await decodeToMono16k(blob);
       const sr = ASR_TARGET_SR;
       const segLen = ASR_SEG_SECONDS*sr, step = segLen - ASR_SEG_OVERLAP*sr;
-      const total = Math.max(1, Math.ceil((pcm.length - ASR_SEG_OVERLAP*sr) / step));
-      const texts=[];
-      let idx=0;
+      // 先切出所有分段区间，再并行转写，结果按原顺序回填，避免串行逐段等待
+      const ranges=[];
       for(let start=0; start<pcm.length; start+=step){
         const end = Math.min(pcm.length, start+segLen);
-        idx++; if(onProgress) onProgress(idx, total);
-        const wav = encodeWav16(pcm.subarray(start, end), sr);
-        try{ const t=((await AIProxy.asr(await blobToDataURL(wav)))||'').trim(); if(t) texts.push(t); }
-        catch(e){ console.warn(`第${idx}段转写失败，跳过`, e); }
+        ranges.push([start, end]);
         if(end>=pcm.length) break;
       }
+      const total = ranges.length;
+      const texts = new Array(total).fill('');
+      let done = 0, next = 0;
+      async function worker(){
+        while(true){
+          const i = next++; if(i >= total) break;
+          const [s,e] = ranges[i];
+          const wav = encodeWav16(pcm.subarray(s, e), sr);
+          try{ texts[i] = ((await AIProxy.asr(await blobToDataURL(wav), context))||'').trim(); }
+          catch(err){ console.warn(`第${i+1}段转写失败，跳过`, err); texts[i]=''; }
+          done++; if(onProgress) onProgress(done, total);
+        }
+      }
+      await Promise.all(Array.from({length: Math.min(ASR_SEG_CONCURRENCY, total)}, ()=>worker()));
       return joinSegments(texts);
     }
     document.getElementById('recordBtn').addEventListener('click',()=>{ if(!state.waitingAnswer) return; state.isRecording?stopRecording():startRecording(); });
@@ -952,16 +1015,15 @@ ${roleGuide ? roleGuide + '\n' : ''}
       const m=document.getElementById('endModal'); m.classList.remove('hidden'); m.classList.add('flex');
       const endMsg=document.getElementById('endMsg');
 
-      // 停止视频录制并上传（先 stop 拿到完整数据，再彻底关闭摄像头）
+      // 停止录制并把录像存到本机（先 stop 拿到完整数据，再彻底关闭摄像头）。录像不上传云端，仅本设备可回放
       if(state.recordVideo && state.videoRecorder){
-        endMsg.textContent = '正在保存面试视频，请稍候…';
+        endMsg.textContent = '正在保存录像到本机，请稍候…';
         document.getElementById('goReport').disabled = true;
-        const res = await stopAndUploadVideo((pct)=>{ endMsg.textContent = `正在保存面试视频… ${pct}%`; });
+        const res = await saveVideoLocal(sessionId);
         document.getElementById('goReport').disabled = false;
-        if(res.status==='ok') endMsg.textContent = '✅ 面试视频已保存';
-        else if(res.status==='not-logged-in') endMsg.textContent = 'ℹ️ 未登录，本次录像未保存（登录后录像会自动存入历史回放）';
-        else endMsg.textContent = '⚠️ 视频保存失败：' + (res.message||'稍后可重试') + '（不影响评分报告）';
-        await new Promise(r=>setTimeout(r, res.status==='ok'?600:1800)); // 让用户看清提示
+        if(res.status==='ok') endMsg.textContent = '✅ 录像已保存到本机（仅本设备可回放，不会上传云端）';
+        else endMsg.textContent = '⚠️ 录像本地保存失败：' + (res.message||'稍后可重试') + '（不影响评分报告）';
+        await new Promise(r=>setTimeout(r, res.status==='ok'?700:1700)); // 让用户看清提示
       }
 
       // ===== 多轮：每轮各自出报告。若后面还有轮次且未提前结束，写入本轮交接纪要供下一轮继承 =====
@@ -1013,7 +1075,8 @@ ${qaText}
       return fallback;
     }
 
-    async function stopAndUploadVideo(onProgress){
+    // 录像只保存到用户本机（IndexedDB），绝不上传云端；以 sessionId 为 key，供报告页/历史页回放
+    async function saveVideoLocal(key){
       return new Promise((resolve)=>{
         if(!state.videoRecorder || state.videoRecorder.state==='inactive'){ resolve({status:'error', message:'录制器不可用'}); return; }
         state.videoRecorder.onstop = async () => {
@@ -1021,46 +1084,14 @@ ${qaText}
             const contentType=state.videoRecorder.mimeType || 'video/webm';
             const blob = new Blob(state.videoChunks, { type:contentType });
             if(!blob.size){ resolve({status:'error', message:'录制内容为空'}); return; }
-            const { data:{ session } } = await sb.auth.getSession();
-            const user = session?.user;
-            if(!user){ resolve({status:'not-logged-in'}); return; }
-            const extension=contentType.includes('mp4')?'mp4':'webm';
-            const fileName = `${user.id}/${Date.now()}.${extension}`;
-            // 优先 TUS 断点续传（分片上传、弱网可续、带进度）；不可用或失败则回退标准单次上传
-            const resumed = await uploadResumable(blob, fileName, contentType, session.access_token, onProgress).catch(()=>false);
-            if(resumed){ localStorage.setItem('videoPath', fileName); resolve({status:'ok', path:fileName}); return; }
-            const { error } = await sb.storage.from(VIDEO_BUCKET).upload(fileName, blob, { contentType, upsert:false });
-            if(error){ console.warn('视频上传失败', error); resolve({status:'error', message:error.message||'上传失败'}); return; }
-            // 私有桶：只保存存储路径，回放时由报告页生成短期签名链接
-            localStorage.setItem('videoPath', fileName);
-            resolve({status:'ok', path:fileName});
-          } catch(e){ console.warn('上传异常', e); resolve({status:'error', message:e.message||'上传异常'}); }
+            await MediaStore.put(key, blob);
+            MediaStore.requestPersist();
+            localStorage.setItem('videoLocalKey', key);
+            localStorage.removeItem('videoPath'); localStorage.removeItem('videoUrl');
+            resolve({status:'ok', key});
+          } catch(e){ console.warn('本地保存录像失败', e); resolve({status:'error', message:e.message||'本地保存失败'}); }
         };
         try{ state.videoRecorder.stop(); }catch(e){ resolve({status:'error', message:'录制器停止失败'}); }
-      });
-    }
-
-    /* Supabase Storage 断点续传（TUS）：分片 6MB、自动重试、可续传。成功 resolve(true)，不可用/失败 resolve(false) 交由调用方回退标准上传 */
-    function uploadResumable(blob, objectName, contentType, accessToken, onProgress){
-      return new Promise((resolve)=>{
-        if(!window.tus || !accessToken){ resolve(false); return; }
-        try{
-          const upload = new tus.Upload(blob, {
-            endpoint: `${SUPABASE_URL}/storage/v1/upload/resumable`,
-            retryDelays: [0, 1000, 3000, 6000, 12000],
-            headers: { authorization: `Bearer ${accessToken}`, 'x-upsert': 'true' },
-            uploadDataDuringCreation: true,
-            removeFingerprintOnSuccess: true,
-            chunkSize: 6 * 1024 * 1024, // Supabase 要求固定 6MB
-            metadata: { bucketName: VIDEO_BUCKET, objectName, contentType, cacheControl: '3600' },
-            onError: (err)=>{ console.warn('断点续传失败，转标准上传', err); resolve(false); },
-            onProgress: (sent, total)=>{ if(onProgress && total) onProgress(Math.floor(sent/total*100)); },
-            onSuccess: ()=> resolve(true),
-          });
-          upload.findPreviousUploads()
-            .then(prev=>{ if(prev && prev.length) upload.resumeFromPreviousUpload(prev[0]); upload.start(); })
-            .catch(()=>{ try{ upload.start(); }catch(_){ resolve(false); } });
-        }catch(e){ console.warn('断点续传初始化失败，转标准上传', e); resolve(false); }
       });
     }
 

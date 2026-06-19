@@ -68,8 +68,8 @@ window.AIProxy = (function () {
     vision: (messages) => call("vision", { messages }).then((d) => d.content),
     /** 语音合成。返回音频 URL（24h有效） */
     tts: (text, voice) => call("tts", { text, voice }).then((d) => d.url),
-    /** 录音转文字。audio: base64 Data URL，返回识别文本 */
-    asr: (audio) => call("asr", { audio }).then((d) => d.text),
+    /** 录音转文字。audio: base64 Data URL；context: 可选热词/上下文（岗位/JD/简历/当前问题），提升专有名词与同音字准确率。返回识别文本 */
+    asr: (audio, context) => call("asr", { audio, context }).then((d) => d.text),
     /** 查询今日额度 {used, limit} */
     quota: () => call("quota", {}),
   };

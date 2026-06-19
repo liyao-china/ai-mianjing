@@ -8,6 +8,8 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
+  <!-- 本地视频存储：录像只存用户本机，回放从这里读 -->
+  <script src="media-store.js"></script>
   <script src="ai-client.js"></script>
   <script>
     tailwind.config = { theme: { extend: {
@@ -94,7 +96,7 @@
       </div>
       <video id="replayVideo" controls class="w-full rounded-xl bg-black" style="max-height:400px;"></video>
       <p id="videoMsg" class="hidden text-sm text-brandorange mt-2"></p>
-      <p class="text-xs text-gray-400 mt-2">录像存放在你的私人空间，仅本人登录后可回放；不需要时可随时删除，删除后报告与评分仍会保留。</p>
+      <p class="text-xs text-gray-400 mt-2">🔒 录像只保存在你本机的浏览器里，<b>不会上传云端</b>，仅本设备可回放；不需要时可随时删除，删除后报告与评分仍会保留。</p>
     </div>
 
     <!-- 镜头表现分析（视频面试专属） -->
@@ -180,12 +182,32 @@
         el.appendChild(btn);
       }
     }
+    let currentObjectUrl = null; // 本地录像生成的 blob URL，切换/删除时需 revoke
     async function showReplayVideo(value, opts={}){
       if(!value) return;
       currentVideo = { ref:value, recordId:opts.recordId||null };
       const section=document.getElementById('videoSection');
       const videoEl=document.getElementById('replayVideo');
       const retry=()=>showReplayVideo(value, opts);
+      // 本地录像（仅本设备可回放，不上传云端）：从 IndexedDB 读取
+      if(window.MediaStore && MediaStore.isLocalRef(value)){
+        if(currentObjectUrl){ try{ URL.revokeObjectURL(currentObjectUrl); }catch(_){} currentObjectUrl=null; }
+        let blob=null;
+        try{ blob = await MediaStore.get(MediaStore.keyOf(value)); }
+        catch(e){ console.warn('读取本地录像失败', e); }
+        if(!blob){
+          section.classList.remove('hidden'); videoEl.classList.add('hidden');
+          showVideoMsg('未找到本地录像。录像仅保存在录制时使用的设备/浏览器中（不会上传云端），换设备、清除浏览器数据或无痕模式都无法回放。');
+          return;
+        }
+        currentObjectUrl = URL.createObjectURL(blob);
+        showVideoMsg('');
+        section.classList.remove('hidden'); videoEl.classList.remove('hidden');
+        videoEl.onerror = ()=>showVideoMsg('本地录像无法播放，文件可能已损坏。');
+        videoEl.dataset.resigned='';
+        videoEl.src = currentObjectUrl;
+        return;
+      }
       let src = value;
       if(!/^https?:\/\//i.test(value)){
         try{
@@ -244,13 +266,18 @@
       const btn=document.getElementById('deleteVideoBtn');
       btn.disabled=true; btn.textContent='删除中…';
       try{
-        // 1. 删除存储中的视频文件（旧公开链接也能解析出路径）
-        let path=currentVideo.ref;
-        if(/^https?:\/\//i.test(path)){
-          const m=path.match(/\/interview-videos\/(.+?)(\?|$)/);
-          path=m?decodeURIComponent(m[1]):null;
+        // 1. 删除录像文件：本地录像删 IndexedDB；旧版云端录像删 Storage
+        if(window.MediaStore && MediaStore.isLocalRef(currentVideo.ref)){
+          try{ await MediaStore.del(MediaStore.keyOf(currentVideo.ref)); }catch(e){ console.warn('本地录像删除失败', e); }
+          if(currentObjectUrl){ try{ URL.revokeObjectURL(currentObjectUrl); }catch(_){} currentObjectUrl=null; }
+        } else {
+          let path=currentVideo.ref;
+          if(/^https?:\/\//i.test(path)){
+            const m=path.match(/\/interview-videos\/(.+?)(\?|$)/);
+            path=m?decodeURIComponent(m[1]):null;
+          }
+          if(path){ const { error }=await sb.storage.from(VIDEO_BUCKET).remove([path]); if(error) console.warn('存储删除失败', error); }
         }
-        if(path){ const { error }=await sb.storage.from(VIDEO_BUCKET).remove([path]); if(error) console.warn('存储删除失败', error); }
         // 2. 清除记录里的视频引用
         if(currentVideo.recordId){
           await sb.from('interview_records').update({ video_url:null }).eq('id', currentVideo.recordId);
@@ -259,7 +286,7 @@
           let changed=false;
           h.forEach(item=>{ if(item.video_url===currentVideo.ref){ item.video_url=null; changed=true; } });
           if(changed) localStorage.setItem('interviewHistory', JSON.stringify(h));
-          localStorage.removeItem('videoPath'); localStorage.removeItem('videoUrl');
+          localStorage.removeItem('videoPath'); localStorage.removeItem('videoUrl'); localStorage.removeItem('videoLocalKey');
         }
         // 3. 收起回放区域
         const v=document.getElementById('replayVideo'); v.pause(); v.removeAttribute('src'); v.load();
@@ -336,8 +363,9 @@
       levelName = meta.levelName || '中级';
       document.getElementById('reportMeta').textContent = [jobName, levelName, meta.roundName, meta.typeList||'综合面试'].filter(Boolean).join(' · ');
 
-      // 本次录制的视频（私有桶路径，签名后回放）
-      showReplayVideo(localStorage.getItem('videoPath') || localStorage.getItem('videoUrl'));
+      // 本次录制的视频：优先本地录像(IndexedDB)；旧版云端路径作兼容
+      const _localKey = localStorage.getItem('videoLocalKey');
+      showReplayVideo(_localKey ? MediaStore.refOf(_localKey) : (localStorage.getItem('videoPath') || localStorage.getItem('videoUrl')));
 
       const cachedReport = localStorage.getItem('currentInterviewReport');
       if(!qaRecords.length){ showError('没有找到面试记录，请先完成一场面试。'); }
@@ -530,8 +558,9 @@ ${qaText}
     async function saveToCloud(result){
       if(isViewMode) return;
       let total=0; DIMENSIONS.forEach(d=> total+=(result.scores[d.key]||0)*d.weight/100); total=total.toFixed(1);
-      // 私有桶：video_url 字段存储路径（如 uid/时间戳.webm），回放时签名
-      const videoRef = localStorage.getItem('videoPath') || localStorage.getItem('videoUrl') || null;
+      // 录像只存本机：video_url 存 "local:<key>" 标记，换设备时识别为本地录像；旧版云端路径作兼容
+      const _localKey = localStorage.getItem('videoLocalKey');
+      const videoRef = _localKey ? MediaStore.refOf(_localKey) : (localStorage.getItem('videoPath') || localStorage.getItem('videoUrl') || null);
       const localRecord = { date:new Date().toLocaleString('zh-CN'), jobName, levelName, typeList:[meta.roundName, meta.typeList||'综合面试'].filter(Boolean).join(' · '), totalScore:parseFloat(total), scores:result.scores, qaRecords, report:result, video_url:videoRef };
 
       let user=null;
@@ -559,7 +588,7 @@ ${qaText}
         if(error) throw error;
         cloudSaved = true;
         localStorage.removeItem('videoUrl'); localStorage.removeItem('videoPath');
-        showSaveToast('ok','✅ 已保存到历史记录'+(videoRef?'（含录像）':''));
+        showSaveToast('ok','✅ 已保存到历史记录'+(videoRef?'（录像仅存本机）':''));
       }catch(e){
         console.warn('云端保存失败:', e);
         if(!cloudSaved) saveLocalHistory(localRecord); // 兜底：先存本地，避免完全丢失（保留 videoPath 以便重试上传引用）

@@ -8,6 +8,8 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
+  <!-- 本地视频存储：删除本地录像时用到 -->
+  <script src="media-store.js"></script>
   <script>
     tailwind.config = { theme: { extend: {
       colors: { indigo: { DEFAULT: '#6366F1' }, brandgreen: '#10B981', brandorange: '#F59E0B' },
@@ -225,12 +227,17 @@
     async function deleteRecordVideo(r){
       try{
         const VIDEO_BUCKET='interview-videos';
-        let path=r.video_url;
-        if(/^https?:\/\//i.test(path)){
-          const m=path.match(/\/interview-videos\/(.+?)(\?|$)/);
-          path=m?decodeURIComponent(m[1]):null;
+        // 本地录像删 IndexedDB；旧版云端录像删 Storage
+        if(window.MediaStore && MediaStore.isLocalRef(r.video_url)){
+          try{ await MediaStore.del(MediaStore.keyOf(r.video_url)); }catch(e){ console.warn('本地录像删除失败', e); }
+        } else {
+          let path=r.video_url;
+          if(/^https?:\/\//i.test(path)){
+            const m=path.match(/\/interview-videos\/(.+?)(\?|$)/);
+            path=m?decodeURIComponent(m[1]):null;
+          }
+          if(path){ const { error }=await supabaseClient.storage.from(VIDEO_BUCKET).remove([path]); if(error) console.warn('存储删除失败', error); }
         }
-        if(path){ const { error }=await supabaseClient.storage.from(VIDEO_BUCKET).remove([path]); if(error) console.warn('存储删除失败', error); }
         if(r.id){
           const { error }=await supabaseClient.from('interview_records').update({ video_url:null }).eq('id', r.id);
           if(error){ console.warn('清除记录视频引用失败', error); return false; }
