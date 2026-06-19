@@ -76,6 +76,11 @@ create policy "own records delete" on public.interview_records
 -- 注意：还需在 控制台 → Storage → interview-videos → 设置 中把 Public 开关关掉！
 update storage.buckets set public = false where id = 'interview-videos';
 
+-- 放宽单文件大小上限到 500MB，支撑长面试录像的 TUS 断点续传分片上传。
+-- 注意：若项目「全局上传大小限制」(Project Settings → Storage → Global file size limit) 比这里小，
+--       仍以全局值为准，需要在控制台同步调大。
+update storage.buckets set file_size_limit = 524288000 where id = 'interview-videos';
+
 drop policy if exists "own videos read" on storage.objects;
 drop policy if exists "own videos insert" on storage.objects;
 drop policy if exists "own videos delete" on storage.objects;
