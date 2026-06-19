@@ -77,24 +77,34 @@ Deno.serve(async (req) => {
   const { service, payload } = body ?? {};
   if (service !== "quota" && !COSTS[service]) return json({ error: "未知服务类型" }, 400, headers);
 
+  const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
   // ---- 识别调用者：登录用户按 user_id，匿名按 IP ----
+  // 安全要点：只解码 JWT payload 不可信（role/sub 可被伪造来骗取更高额度、白嫖模型）。
+  // 先用本地声明做快速预筛（避免给匿名/anon-key 请求增加网络往返），再用 service-role
+  // 调 auth.getUser(token) 真正校验签名，只有验签通过才认定为登录用户。
   let identity = "";
   let isUser = false;
   const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+  let claimsAuthenticated = false;
   try {
     const claims = JSON.parse(atob(token.split(".")[1]));
-    if (claims?.sub && claims?.role === "authenticated") {
-      identity = `user:${claims.sub}`;
-      isUser = true;
-    }
-  } catch { /* 匿名 */ }
+    if (claims?.sub && claims?.role === "authenticated") claimsAuthenticated = true;
+  } catch { /* 非 JWT / anon / 匿名 */ }
+  if (claimsAuthenticated) {
+    try {
+      const { data, error } = await admin.auth.getUser(token);
+      if (!error && data?.user?.id) {
+        identity = `user:${data.user.id}`;
+        isUser = true;
+      }
+    } catch { /* 验签失败 → 当作匿名处理 */ }
+  }
   if (!identity) {
     const ip = (req.headers.get("x-forwarded-for") ?? "unknown").split(",")[0].trim();
     identity = `ip:${ip}`;
   }
   const limit = isUser ? DAILY_LIMIT_USER : DAILY_LIMIT_ANON;
-
-  const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
   // ---- 查询额度（不扣费）----
   if (service === "quota") {
