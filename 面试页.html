@@ -139,6 +139,11 @@
     <div class="text-sm font-bold mb-1">📹 先调整你的出镜效果</div>
     <p class="text-xs text-gray-500 mb-3">在左上角「我的视频」窗里选择 <b>虚化 / 渐变 / 深色背景</b> 或开启 <b>✨ 美颜</b>，预览满意后再开始。<b>录制会在你点击开始后才启动</b>，调试过程不会被录进去。</p>
     <button id="startInterviewBtn" class="gradient-btn text-white text-sm font-medium px-6 py-2.5 rounded-xl w-full">✅ 开始面试</button>
+    <div class="flex items-center justify-center gap-4 mt-2.5">
+      <button id="setupVoiceBtn" class="text-xs text-gray-500 hover:text-indigo underline underline-offset-2">改用语音回答（不录像）</button>
+      <span class="text-gray-200">|</span>
+      <button id="setupCancelBtn" class="text-xs text-gray-400 hover:text-brandorange underline underline-offset-2">取消，返回配置</button>
+    </div>
   </div>
 
   <!-- 提前结束确认弹窗 -->
@@ -218,8 +223,15 @@
     const TOTAL_QUESTIONS = dur.total;
 
     const seriesTag = series.rounds.length>1 ? `【第${series.index+1}/${series.rounds.length}轮】` : '';
+    // 顶部标签始终反映「实际作答方式」(state.inputMode)，避免改用语音/文字后仍显示旧方式
+    function updateConfigLabel(){
+      const im = (typeof state !== 'undefined' && state && state.inputMode) ? state.inputMode : (cfg.input || 'video');
+      document.getElementById('configLabel').textContent = `${seriesTag}${jobName} · ${levelName} · ${roundName} · ${typeList} · ${inputNames[im] || inputNames.video}`;
+    }
     document.getElementById('configLabel').textContent = `${seriesTag}${jobName} · ${levelName} · ${roundName} · ${typeList} · ${inputNames[cfg.input] || inputNames.video}`;
     document.getElementById('qTotal').textContent = TOTAL_QUESTIONS;
+    // 顶部倒计时初始显示按所选时长，而非硬编码 30:00
+    document.getElementById('timer').textContent = fmt(dur.sec);
 
     // 进入面试页即清理上一场「已完成」的残留数据，避免刷新/直接打开报告页时串到旧的问答与报告
     // （多轮衔接所需的 interviewSeries.carryover 不在此清理，仅清理单场产物）
@@ -523,6 +535,7 @@ ${roleGuide ? roleGuide + '\n' : ''}
       const openings={
         mentor:`你好，我是${jobName}团队的面试官，平时在一线带项目，今天这场是业务一面。先请你用 1-2 分钟做个自我介绍，重点讲讲你实际做过的、和这个岗位最相关的事情。`,
         leader:`你好，我是这个业务的负责人，今天由我来进行你的业务二面。时间有限，请你用 1-2 分钟做个自我介绍，重点说清楚：你做过什么，以及你认为自己最有价值的地方在哪。`,
+        director:`你好，我是${jobName}所在业务线的总监，今天这场是三面、也会带一些交叉视角。请你先用 1-2 分钟做个自我介绍，重点谈谈你做过最有影响力的一件事，以及你从中形成的判断。`,
         hr:`你好，我是公司的HR，感谢你来参加今天的面试。先请你用 1-2 分钟简单介绍一下自己，也可以聊聊你为什么对${jobName}这个岗位感兴趣。`
       };
       const question=openings[roundKey]||openings.mentor;
@@ -570,8 +583,18 @@ ${roleGuide ? roleGuide + '\n' : ''}
       div.querySelector('.retry-ask').addEventListener('click',()=>{ if(state.aiThinking) return; div.remove(); askNextQuestion(); });
     }
 
+    /* 内联轻提示：复用顶部 progressTip，短暂高亮后恢复，替代打断式 alert */
+    let _tipTimer=null, _tipPrev=null;
+    function flashTip(msg){
+      const el=document.getElementById('progressTip'); if(!el) return;
+      if(_tipPrev===null) _tipPrev=el.textContent;
+      clearTimeout(_tipTimer);
+      el.textContent=msg; el.classList.add('text-brandorange');
+      _tipTimer=setTimeout(()=>{ if(_tipPrev!==null) el.textContent=_tipPrev; el.classList.remove('text-brandorange'); _tipPrev=null; _tipTimer=null; }, 2200);
+    }
+
     async function submitAnswer(answerText){
-      if(!answerText || !answerText.trim()){ alert('回答内容为空'); return; }
+      if(!answerText || !answerText.trim()){ flashTip('还没有检测到回答内容，请先作答'); return; }
       removeLiveUserBubble();
       addUserBubble(answerText);
       state.messages.push({role:'user',content:answerText});
@@ -596,7 +619,7 @@ ${roleGuide ? roleGuide + '\n' : ''}
     }
 
     document.getElementById('nextBtn').addEventListener('click',()=>{
-      if(state.inputMode==='text'){ const txt=document.getElementById('textInput').value.trim(); if(!txt){alert('请先输入回答');return;} submitAnswer(txt); }
+      if(state.inputMode==='text'){ const txt=document.getElementById('textInput').value.trim(); if(!txt){flashTip('请先输入回答内容');return;} submitAnswer(txt); }
       else { if(state.isRecording) stopRecording(); }
     });
 
@@ -605,6 +628,7 @@ ${roleGuide ? roleGuide + '\n' : ''}
       const btn=document.getElementById('switchModeBtn');
       if(state.inputMode==='text'){ document.getElementById('voiceMode').classList.add('hidden'); document.getElementById('textMode').classList.remove('hidden'); btn.textContent='🎙️ 切换语音'; if(state.waitingAnswer){ document.getElementById('nextBtn').classList.remove('hidden'); document.getElementById('nextBtn').textContent='✓ 提交回答'; } }
       else { document.getElementById('voiceMode').classList.remove('hidden'); document.getElementById('textMode').classList.add('hidden'); btn.textContent='⌨️ 切换文字'; document.getElementById('nextBtn').classList.add('hidden'); }
+      updateConfigLabel();
     });
 
     /* ===== 麦克风音量分析 + 语音识别 ===== */
@@ -912,6 +936,7 @@ ${qaText}
           document.getElementById('recordHint').textContent='麦克风无法使用，已自动切换为文字回答';
         }
       }
+      updateConfigLabel();
       closeVideoModal(); startFlow();
     });
 
@@ -964,6 +989,29 @@ ${qaText}
       startFrameSampling(); // 采样关键帧供报告页分析镜头表现
       exitSetupMode();
       startFlow();
+    });
+
+    /* 出镜设置阶段出口：改用语音（关摄像头、不录像，保留麦克风做语音识别） */
+    document.getElementById('setupVoiceBtn').addEventListener('click', ()=>{
+      pipelineOn=false; stopFrameSampling();
+      if(state.videoStream){ state.videoStream.getVideoTracks().forEach(t=>t.stop()); }
+      document.getElementById('videoPanel').classList.add('hidden');
+      document.body.classList.remove('video-active');
+      state.recordVideo = false;
+      state.inputMode = 'voice';
+      document.getElementById('switchModeBtn').textContent='⌨️ 切换文字';
+      document.getElementById('recordHint').textContent='已改用语音回答（不录像），点击麦克风开始作答';
+      updateConfigLabel();
+      exitSetupMode();
+      startFlow();
+    });
+
+    /* 出镜设置阶段出口：取消并返回配置页（彻底释放摄像头/麦克风） */
+    document.getElementById('setupCancelBtn').addEventListener('click', ()=>{
+      pipelineOn=false; stopFrameSampling();
+      if(state.videoStream){ state.videoStream.getTracks().forEach(t=>t.stop()); }
+      if(state.mediaStream && state.mediaStream!==state.videoStream){ state.mediaStream.getTracks().forEach(t=>t.stop()); }
+      location.href='配置页.html';
     });
     document.querySelectorAll('[data-video-size]').forEach(btn=>btn.addEventListener('click',()=>{
       const panel=document.getElementById('videoPanel');
@@ -1162,6 +1210,7 @@ ${qaText}
           document.getElementById('recordHint').textContent='麦克风无法使用，已自动切换为文字回答';
         }
       }
+      updateConfigLabel();
       startFlow();
     }
     if(cfg.input!=='video') startWithoutVideo();

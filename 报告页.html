@@ -165,6 +165,7 @@
 
     // 私有桶视频：存储的是路径，回放时签发1小时有效的签名链接；旧记录的 http 链接直接使用
     let currentVideo = { ref:null, recordId:null };
+    let radarChartInstance = null; // 复用同一 canvas，重渲染前需销毁旧实例
     function showVideoMsg(msg){
       const el=document.getElementById('videoMsg');
       if(!msg){ el.classList.add('hidden'); return; }
@@ -178,7 +179,8 @@
       let src = value;
       if(!/^https?:\/\//i.test(value)){
         try{
-          const { data, error } = await sb.storage.from(VIDEO_BUCKET).createSignedUrl(value, 3600);
+          // 24h 有效期，降低长时间停留导致链接过期的概率；过期后由 video error 兜底重签
+          const { data, error } = await sb.storage.from(VIDEO_BUCKET).createSignedUrl(value, 86400);
           if(error || !data?.signedUrl){
             console.warn('签名链接生成失败', error);
             section.classList.remove('hidden'); videoEl.classList.add('hidden');
@@ -195,6 +197,18 @@
       }
       showVideoMsg('');
       section.classList.remove('hidden'); videoEl.classList.remove('hidden');
+      // 播放出错（多为签名链接过期）时，对私有路径自动重签一次
+      videoEl.onerror = async ()=>{
+        const ref = currentVideo.ref;
+        if(!ref || /^https?:\/\//i.test(ref) || videoEl.dataset.resigned==='1') return;
+        videoEl.dataset.resigned='1';
+        try{
+          const { data, error } = await sb.storage.from(VIDEO_BUCKET).createSignedUrl(ref, 86400);
+          if(!error && data?.signedUrl){ videoEl.src = data.signedUrl; videoEl.load(); }
+          else { showVideoMsg('录像链接已失效，请刷新页面重试。'); }
+        }catch(_){ showVideoMsg('录像链接已失效，请刷新页面重试。'); }
+      };
+      videoEl.dataset.resigned='';
       videoEl.src = src;
     }
 
@@ -548,7 +562,8 @@ ${qaText}
       document.getElementById('levelTag').textContent=level;
       document.getElementById('overallComment').textContent=result.overallComment||'';
 
-      new Chart(document.getElementById('radarChart'),{ type:'radar',
+      if(radarChartInstance){ radarChartInstance.destroy(); }
+      radarChartInstance = new Chart(document.getElementById('radarChart'),{ type:'radar',
         data:{ labels:DIMENSIONS.map(d=>d.name),
           datasets:[{ data:DIMENSIONS.map(d=>scores[d.key]||0), backgroundColor:'rgba(99,102,241,0.15)', borderColor:'#6366F1', borderWidth:2, pointBackgroundColor:'#6366F1', pointRadius:4 }]},
         options:{ scales:{ r:{min:0,max:100,ticks:{stepSize:20,color:'#9CA3AF',backdropColor:'transparent',font:{size:10}},grid:{color:'#E5E7EB'},angleLines:{color:'#E5E7EB'},pointLabels:{color:'#374151',font:{size:12}}}}, plugins:{legend:{display:false}} }});
