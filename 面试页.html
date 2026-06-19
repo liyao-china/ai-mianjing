@@ -192,8 +192,20 @@
     const cfgRounds = (Array.isArray(cfg.rounds) && cfg.rounds.length) ? cfg.rounds : (cfg.round ? [cfg.round] : ['mentor']);
     let series = null;
     try { series = JSON.parse(localStorage.getItem('interviewSeries')||'null'); } catch(e){}
-    if(!series || !Array.isArray(series.rounds) || !series.rounds.length){ series = { rounds:cfgRounds.slice(), index:0, carryover:[] }; localStorage.setItem('interviewSeries', JSON.stringify(series)); }
-    if(series.index > series.rounds.length-1) series.index = series.rounds.length-1;
+    // 只有「报告页点击进入下一轮」会带一次性 seriesAdvance 标记，此时才续接已存序列（保留 index 与交接纪要）。
+    // 其他入口（书签/历史/直接刷新/配置变更）一律按当前配置重建，避免轮次标签错乱与上一轮 carryover 串场。
+    const seriesAdvancing = localStorage.getItem('seriesAdvance')==='1';
+    localStorage.removeItem('seriesAdvance');
+    const seriesMatchesCfg = series && Array.isArray(series.rounds)
+      && JSON.stringify(series.rounds)===JSON.stringify(cfgRounds)
+      && Number.isInteger(series.index);
+    if(seriesAdvancing && seriesMatchesCfg){
+      series.index = Math.max(0, Math.min(series.index, series.rounds.length-1));
+      if(!Array.isArray(series.carryover)) series.carryover = [];
+    } else {
+      series = { rounds: cfgRounds.slice(), index:0, carryover:[] };
+    }
+    localStorage.setItem('interviewSeries', JSON.stringify(series));
 
     const jobName = jobNames[cfg.job] || 'AI产品经理';
     const levelKey = levelNames[cfg.level] ? cfg.level : 'mid';

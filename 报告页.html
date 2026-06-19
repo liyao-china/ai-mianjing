@@ -659,7 +659,7 @@ ${answer?`【候选人本次的回答（可参考其薄弱处，但不要照抄�
       document.getElementById('nextRoundTitle').textContent=`✅ ${curName} 已完成 · 还有 ${remain} 轮`;
       document.getElementById('nextRoundDesc').textContent=`真实流程中通常这一轮通过后才进入下一轮。继续进入【${nextName}】？面试官会延续你本轮暴露的强项与待改进点继续深入。`;
       const btn=document.getElementById('nextRoundBtn'); btn.textContent=`进入下一轮：${nextName} →`;
-      btn.onclick=()=>{ s.index+=1; localStorage.setItem('interviewSeries',JSON.stringify(s)); location.href='面试页.html'; };
+      btn.onclick=()=>{ s.index+=1; localStorage.setItem('interviewSeries',JSON.stringify(s)); localStorage.setItem('seriesAdvance','1'); location.href='面试页.html'; };
       document.getElementById('endSeriesBtn').onclick=()=>{ localStorage.removeItem('interviewSeries'); document.getElementById('nextRoundBanner').classList.add('hidden'); };
       document.getElementById('nextRoundBanner').classList.remove('hidden');
     }
