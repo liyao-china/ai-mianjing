@@ -436,7 +436,7 @@ ${qaText}
         document.getElementById('loadingTip').textContent = 'AI 正在逐题分析，请稍候...';
         const content = await AIProxy.chat([
           {role:'system',content:'你是专业的面试评分专家，只返回JSON格式的评分结果。'},
-          {role:'user',content:prompt}]) || '';
+          {role:'user',content:prompt}], { mode:'strong' }) || '';
         const result = parseReport(content);
         renderReport(result); // 先展示文字报告，镜头分析随后补充
         result.videoAnalysis = await analyzeVideoFrames(); // 无采样帧或分析失败时为 null

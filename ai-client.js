@@ -62,14 +62,16 @@ window.AIProxy = (function () {
   }
 
   return {
-    /** 对话出题/评分。messages: [{role, content}]，返回文本 */
-    chat: (messages) => call("chat", { messages }).then((d) => d.content),
+    /** 对话/评分。messages: [{role, content}]，返回文本；opts.mode='fast' 用快模型做实时追问，默认保留强模型 */
+    chat: (messages, opts) => call("chat", { messages, mode: opts && opts.mode }).then((d) => d.content),
     /** 图像理解（JD截图/镜头分析）。返回文本 */
     vision: (messages) => call("vision", { messages }).then((d) => d.content),
     /** 语音合成。返回音频 URL（24h有效） */
     tts: (text, voice) => call("tts", { text, voice }).then((d) => d.url),
     /** 录音转文字。audio: base64 Data URL；context: 可选热词/上下文（岗位/JD/简历/当前问题），提升专有名词与同音字准确率。返回识别文本 */
     asr: (audio, context) => call("asr", { audio, context }).then((d) => d.text),
+    /** 实时 ASR WebSocket 地址：浏览器连 Supabase 代理，DashScope API Key 只留在 Edge Function */
+    asrStreamUrl: () => FUNCTIONS_URL.replace(/^http/i, "ws") + "?stream=asr&token=" + encodeURIComponent(getAccessToken()),
     /** 查询今日额度 {used, limit} */
     quota: () => call("quota", {}),
   };
