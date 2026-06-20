@@ -52,22 +52,18 @@
     }
     .interviewer-avatar {
       width: min(42vh, 280px); height: min(42vh, 280px);
-      background:
-        radial-gradient(circle at 50% 33%, #FDE7D8 0 23%, transparent 24%),
-        radial-gradient(ellipse at 50% 68%, #F3E8FF 0 42%, transparent 43%),
-        linear-gradient(135deg,#EEF2FF,#E0F2FE);
+      background: linear-gradient(135deg,#EEF2FF,#E0F2FE);
     }
-    .interviewer-avatar::before {
-      content:""; position:absolute; left:50%; top:17%; transform:translateX(-50%);
-      width:38%; height:30%; border-radius:45% 45% 48% 48%;
-      background:linear-gradient(135deg,#2F2F46,#4B5563);
-      box-shadow:0 10px 0 #2F2F46;
-    }
-    .interviewer-avatar::after {
-      content:"AI 面试官"; position:absolute; left:50%; bottom:18%; transform:translateX(-50%);
-      font-size:13px; color:#6366F1; font-weight:700; letter-spacing:.08em;
-      background:rgba(255,255,255,.82); border:1px solid rgba(99,102,241,.16); padding:6px 12px; border-radius:999px;
-    }
+    #ivAvatar { display:block; }
+    #ivBody { transform-box: view-box; transform-origin: 120px 240px; animation: ivBreathe 4.2s ease-in-out infinite; }
+    #ivHeadTop { transform-box: view-box; transform-origin: 120px 150px; }
+    #ivAvatar.iv-speaking #ivHeadTop { animation: ivNod 2.6s ease-in-out infinite; }
+    #ivPupilL, #ivPupilR { transition: cx .35s ease, cy .35s ease; }
+    #ivLidL, #ivLidR { transition: transform .08s ease; }
+    #ivMouthG { transition: transform .05s linear; }
+    @keyframes ivBreathe { 0%,100%{ transform:translateY(0) scale(1);} 50%{ transform:translateY(1.4px) scale(1.014);} }
+    @keyframes ivNod { 0%,100%{ transform:translateY(0) rotate(0);} 42%{ transform:translateY(2.2px) rotate(.7deg);} 72%{ transform:translateY(.6px) rotate(-.5deg);} }
+    @media (prefers-reduced-motion: reduce){ #ivBody, #ivAvatar.iv-speaking #ivHeadTop { animation:none; } }
     .speaking-ring { animation:pulseRing 2.2s ease-out infinite; }
   </style>
 </head>
@@ -106,7 +102,54 @@
     </div>
     <div class="relative flex flex-col items-center">
       <div id="speakerRing" class="absolute inset-0 rounded-full bg-indigo/20 speaking-ring hidden"></div>
-      <div class="interviewer-avatar relative rounded-full shadow-softlg border border-white/80"></div>
+      <div class="interviewer-avatar relative rounded-full shadow-softlg border border-white/80 overflow-hidden">
+        <svg id="ivAvatar" viewBox="0 0 240 240" class="w-full h-full" aria-label="AI 面试官">
+          <defs>
+            <clipPath id="ivClip"><circle cx="120" cy="120" r="120"/></clipPath>
+            <linearGradient id="ivBg" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#EEF2FF"/><stop offset="1" stop-color="#DCE3FB"/>
+            </linearGradient>
+            <linearGradient id="ivSuit" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#41415E"/><stop offset="1" stop-color="#2A2A3E"/>
+            </linearGradient>
+            <radialGradient id="ivSkin" cx="50%" cy="40%" r="62%">
+              <stop offset="0" stop-color="#FFE6D2"/><stop offset="1" stop-color="#F3C6A8"/>
+            </radialGradient>
+          </defs>
+          <g clip-path="url(#ivClip)">
+            <rect width="240" height="240" fill="url(#ivBg)"/>
+            <circle id="ivGlow" cx="120" cy="98" r="78" fill="#A5B4FC" opacity="0"/>
+            <g id="ivBody">
+              <path d="M36 240 C40 186 78 166 120 166 C162 166 200 186 204 240 Z" fill="url(#ivSuit)"/>
+              <path d="M103 170 L120 198 L137 170 L132 240 L108 240 Z" fill="#F5F6FA"/>
+              <path d="M120 198 L120 240" stroke="#DADCE6" stroke-width="2.5"/>
+              <rect x="106" y="136" width="28" height="34" rx="12" fill="#F0BE9E"/>
+              <g id="ivHeadTop">
+                <path d="M62 100 C62 50 90 28 120 28 C150 28 178 50 178 100 C178 124 172 142 164 152 L162 108 C162 78 142 62 120 62 C98 62 78 78 78 108 L76 152 C68 142 62 124 62 100 Z" fill="#39291F"/>
+                <ellipse cx="120" cy="100" rx="46" ry="53" fill="url(#ivSkin)"/>
+                <ellipse cx="73" cy="106" rx="8" ry="12" fill="#F0BE9E"/>
+                <ellipse cx="167" cy="106" rx="8" ry="12" fill="#F0BE9E"/>
+                <path d="M73 96 C73 58 95 40 120 40 C145 40 167 58 167 96 C150 76 138 72 120 72 C102 72 90 76 73 96 Z" fill="#39291F"/>
+                <path id="ivBrowL" d="M87 92 Q100 85 113 91" stroke="#4A332A" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+                <path id="ivBrowR" d="M127 91 Q140 85 153 92" stroke="#4A332A" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+                <g id="ivEyes">
+                  <ellipse cx="100" cy="105" rx="9.2" ry="6.6" fill="#fff"/>
+                  <ellipse cx="140" cy="105" rx="9.2" ry="6.6" fill="#fff"/>
+                  <circle id="ivPupilL" cx="100" cy="105" r="4.4" fill="#39291F"/>
+                  <circle id="ivPupilR" cx="140" cy="105" r="4.4" fill="#39291F"/>
+                </g>
+                <rect id="ivLidL" x="90" y="98" width="20" height="15" rx="6" fill="#F3C6A8" style="transform-box:fill-box;transform-origin:50% 0;transform:scaleY(0)"/>
+                <rect id="ivLidR" x="130" y="98" width="20" height="15" rx="6" fill="#F3C6A8" style="transform-box:fill-box;transform-origin:50% 0;transform:scaleY(0)"/>
+                <path d="M120 110 L115 125 Q120 129 125 125" stroke="#DC9E78" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+                <g id="ivMouthG" style="transform-box:fill-box;transform-origin:50% 50%;transform:scaleY(0.16)">
+                  <ellipse id="ivMouth" cx="120" cy="140" rx="15" ry="9" fill="#A24A42"/>
+                  <ellipse cx="120" cy="137" rx="9" ry="2.6" fill="#F2A39A" opacity=".7"/>
+                </g>
+              </g>
+            </g>
+          </g>
+        </svg>
+      </div>
       <div id="turnHint" class="mt-7 text-white bg-black/38 backdrop-blur px-5 py-2 rounded-full text-sm">等待面试开始</div>
     </div>
   </section>
@@ -393,6 +436,13 @@ ${carryoverText}
 - 不在面试中评价、表扬、教学或暴露评分标准；评估留到报告阶段。
 - 追问优先锚定候选人上一句回答、简历/JD 的具体经历、模糊处、数据结果、本人贡献、关键取舍。
 
+【说话方式——像真人，不像念稿（很重要）】
+- 短句优先：每句话尽量 8-20 字，能一句问清就不要两句；整轮控制在 1-2 句、40 字以内。
+- 口语自然：用日常口语，不用书面腔、不用排比和华丽措辞，不念“首先/其次/综上”。
+- 自然承接：可在问题前加一句很短的承接，如“嗯，我了解了”“好，这点我想追一下”“明白”，但不要每轮都加、不要套话。
+- 不要每次都用完整结构铺垫，直接说重点的那个问题即可。
+- 卡顿或没听清时，用人话过渡，如“我稍微整理一下问题”“这块我没太跟上，你再说下具体怎么做的”，不要暴露任何系统/技术状态。
+
 【绝对边界】
 - 上方“候选人简历/背景”只属于候选人，不属于你。你绝不能把候选人的学校、公司、项目、实习经历说成你的经历，也不能替候选人做自我介绍。
 - 你的身份只来自“你的身份”这一节；你可以说“我是本轮面试官/业务负责人/HR”，但不要展开讲自己的履历。
@@ -483,6 +533,59 @@ ${roleGuide ? roleGuide + '\n' : ''}
       if(r) r.classList.toggle('hidden', !speaking);
     }
 
+    // ===== 拟真面试官形象控制：说话动嘴 / 点头 / 呼吸 / 眨眼 / 思考·聆听 =====
+    const avatar = (function(){
+      const root=document.getElementById('ivAvatar');
+      if(!root) return { setMode(){} };
+      const mouth=document.getElementById('ivMouthG');
+      const pupilL=document.getElementById('ivPupilL'), pupilR=document.getElementById('ivPupilR');
+      const lidL=document.getElementById('ivLidL'), lidR=document.getElementById('ivLidR');
+      const glow=document.getElementById('ivGlow');
+      const baseL={x:100,y:105}, baseR={x:140,y:105};
+      let talkRAF=0, blinkTimer=0, gazeTimer=0, mode='idle';
+      const setMouth=v=>{ if(mouth) mouth.style.transform='scaleY('+v.toFixed(3)+')'; };
+      const setPupils=(dx,dy)=>{
+        if(pupilL){ pupilL.setAttribute('cx', baseL.x+dx); pupilL.setAttribute('cy', baseL.y+dy); }
+        if(pupilR){ pupilR.setAttribute('cx', baseR.x+dx); pupilR.setAttribute('cy', baseR.y+dy); }
+      };
+      function blinkOnce(){
+        [lidL,lidR].forEach(l=>{ if(l) l.style.transform='scaleY(1)'; });
+        setTimeout(()=>{ [lidL,lidR].forEach(l=>{ if(l) l.style.transform='scaleY(0)'; }); }, 95);
+      }
+      function scheduleBlink(){ clearTimeout(blinkTimer); blinkTimer=setTimeout(()=>{ blinkOnce(); scheduleBlink(); }, 2200+Math.random()*3600); }
+      function startTalk(){
+        cancelAnimationFrame(talkRAF); let t=0;
+        const loop=()=>{
+          t+=0.34;
+          let v=0.5+0.32*Math.sin(t)+0.16*Math.sin(t*2.3+1)+0.08*(Math.random()-0.5);
+          setMouth(Math.max(0.12, Math.min(0.95, v)));
+          talkRAF=requestAnimationFrame(loop);
+        };
+        loop();
+      }
+      function stopTalk(){ cancelAnimationFrame(talkRAF); talkRAF=0; setMouth(0.16); }
+      function idleGaze(){
+        clearTimeout(gazeTimer);
+        gazeTimer=setTimeout(()=>{
+          if(mode==='listening'){ setPupils((Math.random()-0.5)*3, (Math.random()-0.5)*2); setTimeout(()=>{ if(mode==='listening') setPupils(0,0); }, 900); }
+          idleGaze();
+        }, 2600+Math.random()*2600);
+      }
+      function setMode(m){
+        if(m===mode && m!=='speaking') return;
+        mode=m;
+        root.classList.toggle('iv-speaking', m==='speaking');
+        if(glow){ glow.style.transition='opacity .5s ease'; glow.style.opacity = (m==='thinking') ? '0.5' : '0'; }
+        if(m==='speaking'){ setPupils(0,0); startTalk(); clearTimeout(gazeTimer); }
+        else { stopTalk(); }
+        if(m==='thinking'){ setPupils(1.6,-2.2); clearTimeout(gazeTimer); }       // 眼神微微上移＝思考
+        else if(m==='listening'){ setPupils(0,0); idleGaze(); }                    // 注视镜头＋偶尔自然游移
+        else if(m==='idle'){ setPupils(0,0); clearTimeout(gazeTimer); }
+      }
+      scheduleBlink(); setMouth(0.16);
+      return { setMode };
+    })();
+
     // ===== AI 语音播报 (TTS) =====
     // 首选：qwen3-tts-flash 拟人语音（经服务端代理）；失败时回退浏览器自带 TTS
     const TTS_VOICE = "Cherry"; // 可选：Cherry(活泼女声)/Serena(温柔女声)/Ethan(沉稳男声)/Chelsie(知性女声)
@@ -501,13 +604,29 @@ ${roleGuide ? roleGuide + '\n' : ''}
       if(!('speechSynthesis' in window)) return;
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
-      u.lang = 'zh-CN'; u.rate = .94; u.pitch = 1.03; if(preferredVoice) u.voice=preferredVoice;
+      u.lang = 'zh-CN'; u.rate = 1.0; u.pitch = 1.03; if(preferredVoice) u.voice=preferredVoice;
       window.speechSynthesis.speak(u);
+    }
+    // 用本机朗读“一句话”，并返回结束 Promise（用于和在线 TTS 统一节奏，超时自动放行）
+    function speakBrowserSentence(text){
+      return new Promise(resolve=>{
+        if(!('speechSynthesis' in window)){ resolve(false); return; }
+        try{
+          window.speechSynthesis.cancel();
+          const u=new SpeechSynthesisUtterance(text);
+          u.lang='zh-CN'; u.rate=1.0; u.pitch=1.03; if(preferredVoice) u.voice=preferredVoice;
+          let done=false; const fin=()=>{ if(!done){ done=true; resolve(true); } };
+          u.onend=fin; u.onerror=fin;
+          setTimeout(fin, Math.min(11000, 1800 + text.length*200)); // onend 偶尔不触发时的兜底
+          window.speechSynthesis.speak(u);
+        }catch(e){ resolve(false); }
+      });
     }
     function stopSpeaking(){
       ttsSeq++;
       if(ttsAudio){ ttsAudio.pause(); ttsAudio.src=''; ttsAudio=null; }
       if('speechSynthesis' in window) window.speechSynthesis.cancel();
+      avatar.setMode('listening');
     }
     // 合成单句音频，返回可播放的 https 地址（失败返回 null）
     async function synthSentence(s){
@@ -535,11 +654,13 @@ ${roleGuide ? roleGuide + '\n' : ''}
       return div;
     }
     // 文字立即打字机显示（不被语音合成阻塞），语音在后台逐句合成播放尽量与文字同步；TTS 全失败时回退浏览器朗读
+    const TTS_SENTENCE_WAIT_MS = 2500; // 单句在线 TTS 超过 2.5s 没回来 → 立即用本机朗读，避免体感卡顿
     async function speakAndReveal(fullText){
       stopSpeaking();
       const seq = ttsSeq;
       state.lastQuestion = fullText;
       setStage('面试官正在提问', '请认真听题，准备回答。', true);
+      avatar.setMode('speaking');
       const bubble = addAIBubbleEl();
       const textEl = bubble.querySelector('[data-ai-text]');
       const typingEl = bubble.querySelector('[data-ai-typing]');
@@ -555,39 +676,35 @@ ${roleGuide ? roleGuide + '\n' : ''}
         if(typed>=fullText.length){ clearInterval(typer); typer=null; if(typingEl && typingEl.parentNode) typingEl.remove(); }
       }, 26);
 
-      // ② 语音后台逐句合成+播放（best-effort，不阻塞文字）
+      // ② 语音：首句优先 + 后续并行预取；单句在线 TTS 超时即用本机朗读兜底（嘴型动画同步进行）
       const sentences = splitSentences(fullText);
-      let anyAudio=false;
+      let anyVoice=false;
+      const playAudioUrl=(url)=>new Promise(resolve=>{
+        ttsAudio = new Audio(url);
+        let done=false; const finish=()=>{ if(!done){ done=true; resolve(); } };
+        ttsAudio.onended = finish; ttsAudio.onerror = finish;
+        ttsAudio.play().catch(finish);
+      });
       let nextUrlP = synthSentence(sentences[0]); // 预取第一句，缩短首声延迟
       for(let i=0;i<sentences.length;i++){
-        if(seq!==ttsSeq){ finalizeText(); return; } // 被用户打断
-        const url = await nextUrlP;
-        if(seq!==ttsSeq){ finalizeText(); return; }
-        nextUrlP = (i+1<sentences.length) ? synthSentence(sentences[i+1]) : Promise.resolve(null);
-        if(url){
-          anyAudio=true;
-          await new Promise(resolve=>{
-            ttsAudio = new Audio(url);
-            let done=false; const finish=()=>{ if(!done){ done=true; resolve(); } };
-            ttsAudio.onended = finish;
-            ttsAudio.onerror = finish;
-            ttsAudio.play().catch(finish);
-          });
-        }
+        if(seq!==ttsSeq){ finalizeText(); avatar.setMode('listening'); return; } // 被用户打断
+        const pending = nextUrlP;
+        nextUrlP = (i+1<sentences.length) ? synthSentence(sentences[i+1]) : Promise.resolve(null); // 并行预取下一句
+        const url = await withTimeout(pending, TTS_SENTENCE_WAIT_MS, null);
+        if(seq!==ttsSeq){ finalizeText(); avatar.setMode('listening'); return; }
+        if(url){ anyVoice=true; await playAudioUrl(url); }
+        else { const ok = await speakBrowserSentence(sentences[i]); if(ok) anyVoice=true; } // 在线慢/失败 → 本机朗读这一句
       }
-      if(seq!==ttsSeq){ finalizeText(); return; }
+      if(seq!==ttsSeq){ finalizeText(); avatar.setMode('listening'); return; }
       finalizeText();
       setStage('轮到你回答', '点击麦克风开始作答。', false);
-      if(!anyAudio){
-        const canBrowserTTS = ('speechSynthesis' in window);
-        if(canBrowserTTS) speakFallback(fullText); // 在线合成全失败 → 浏览器朗读兜底
-        if(!ttsWarned){
-          ttsWarned = true;
-          const note=document.createElement('div');
-          note.className='text-[11px] text-gray-400 mt-1.5';
-          note.textContent = canBrowserTTS ? '🔈 在线语音暂不可用，已改用本机朗读，你也可以直接阅读上方文字题目。' : '🔈 当前环境无法播放语音，请直接阅读上方文字题目。';
-          bubble.querySelector('.max-w-\\[80\\%\\]')?.appendChild(note);
-        }
+      avatar.setMode('listening');
+      if(!anyVoice && !ttsWarned){
+        ttsWarned = true;
+        const note=document.createElement('div');
+        note.className='text-[11px] text-gray-400 mt-1.5';
+        note.textContent = '🔈 当前环境无法播放语音，请直接阅读上方文字题目。';
+        bubble.querySelector('.max-w-\\[80\\%\\]')?.appendChild(note);
       }
     }
 
@@ -633,8 +750,9 @@ ${roleGuide ? roleGuide + '\n' : ''}
     async function askNextQuestion(attempt=0){
       if(state.qaRecords.length >= TOTAL_QUESTIONS){ finishInterview(); return; }
       state.aiThinking=true;
-      document.getElementById('progressTip').textContent='AI 思考中，通常需要 5-15 秒';
-      setStage('面试官思考中', '请稍候。', true);
+      document.getElementById('progressTip').textContent='面试官在思考…';
+      setStage('面试官在思考', '稍候片刻。', false);
+      avatar.setMode('thinking');
       setInputEnabled(false); addThinking();
       try{
         let reply = await callAI(state.messages);
@@ -667,13 +785,15 @@ ${roleGuide ? roleGuide + '\n' : ''}
         state.aiThinking=false;
         removeThinking();
         if(attempt < 1){
-          document.getElementById('progressTip').textContent='出题失败，正在自动重试…';
-          setStage('面试官重新组织问题', '请稍候。', true);
+          document.getElementById('progressTip').textContent='稍等一下';
+          setStage('我稍微整理一下问题', '稍候片刻。', false);
+          avatar.setMode('thinking');
           setTimeout(()=>askNextQuestion(attempt+1), 800);
           return;
         }
-        setStage('出题失败', '请点击右上角提前结束生成已答报告，或刷新后重新开始。', false);
-        document.getElementById('progressTip').textContent='出题失败';
+        setStage('不好意思，我这边卡了一下', '你可以稍等片刻，或点右上角结束本场。', false);
+        avatar.setMode('listening');
+        document.getElementById('progressTip').textContent='稍候片刻';
         setInputEnabled(true);
       }
     }
