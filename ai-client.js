@@ -72,6 +72,8 @@ window.AIProxy = (function () {
     asr: (audio, context) => call("asr", { audio, context }).then((d) => d.text),
     /** 实时 ASR WebSocket 地址：浏览器连 Supabase 代理，DashScope API Key 只留在 Edge Function */
     asrStreamUrl: () => FUNCTIONS_URL.replace(/^http/i, "ws") + "?stream=asr&token=" + encodeURIComponent(getAccessToken()),
+    /** 流式 TTS WebSocket 地址：浏览器发送文本、逐块接收 PCM 音频；voice 可选（CosyVoice 音色） */
+    ttsStreamUrl: (voice) => FUNCTIONS_URL.replace(/^http/i, "ws") + "?stream=tts&token=" + encodeURIComponent(getAccessToken()) + (voice ? "&voice=" + encodeURIComponent(voice) : ""),
     /** 查询今日额度 {used, limit} */
     quota: () => call("quota", {}),
   };

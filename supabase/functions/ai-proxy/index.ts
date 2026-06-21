@@ -23,9 +23,14 @@ const ASR_MODEL = "qwen3-asr-flash";
 const ASR_REALTIME_MODEL = "paraformer-realtime-v2";
 const ASR_WS_URL = "wss://dashscope.aliyuncs.com/api-ws/v1/inference";
 const TTS_VOICES = ["Cherry", "Serena", "Ethan", "Chelsie"];
+// 流式 TTS（CosyVoice，WebSocket，首包 200-800ms）；与 ASR 共用 inference 端点和 run/continue/finish 协议
+const TTS_STREAM_MODEL = "cosyvoice-v2";
+const TTS_STREAM_VOICES = ["longxiaochun_v2", "longwan_v2", "longcheng_v2", "longshu_v2", "longxiaoxia_v2"];
+const TTS_STREAM_DEFAULT_VOICE = "longxiaochun_v2";
+const TTS_STREAM_SAMPLE_RATE = 24000;
 
 // 额度：按"单位"计，约一场标准面试 = 8题 × (出题1 + 语音1 + 转写1) + 报告2 ≈ 26 单位
-const COSTS: Record<string, number> = { chat: 1, vision: 2, tts: 1, asr: 1, asr_stream: 1 };
+const COSTS: Record<string, number> = { chat: 1, vision: 2, tts: 1, asr: 1, asr_stream: 1, tts_stream: 1 };
 const DAILY_LIMIT_ANON = 35;   // 匿名（按IP）：约 1 场/天
 const DAILY_LIMIT_USER = 105;  // 登录用户：约 3 场/天
 
@@ -111,7 +116,8 @@ Deno.serve(async (req) => {
   const headers = corsHeaders(origin);
 
   if (req.headers.get("upgrade")?.toLowerCase() === "websocket") {
-    return handleAsrStream(req, headers);
+    const stream = new URL(req.url).searchParams.get("stream") ?? "asr";
+    return stream === "tts" ? handleTtsStream(req, headers) : handleAsrStream(req, headers);
   }
 
   if (req.method === "OPTIONS") return new Response("ok", { headers });
@@ -312,6 +318,118 @@ function handleAsrStream(req: Request, headers: Record<string, string>) {
     }
     if (upstreamReady && upstream?.readyState === WebSocket.OPEN) upstream.send(event.data);
     else audioQueue.push(event.data);
+  };
+  socket.onerror = () => closeBoth(1011, "client error");
+  socket.onclose = () => { closeBoth(); };
+
+  return response;
+}
+
+// 流式 TTS 代理：浏览器把要朗读的文本经此发给 CosyVoice，逐块回传 PCM 音频（前端用 Web Audio 边收边播）
+function handleTtsStream(req: Request, headers: Record<string, string>) {
+  if (!DASHSCOPE_KEY) return json({ error: "服务端未配置模型密钥" }, 500, headers);
+  if (!isAllowedOrigin(req.headers.get("origin") ?? "")) return json({ error: "origin not allowed" }, 403, headers);
+
+  const { socket, response } = Deno.upgradeWebSocket(req);
+  const url = new URL(req.url);
+  const clientToken = url.searchParams.get("token") ?? "";
+  const reqVoice = url.searchParams.get("voice") ?? "";
+  const voice = TTS_STREAM_VOICES.includes(reqVoice) ? reqVoice : TTS_STREAM_DEFAULT_VOICE;
+  const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+  const taskId = crypto.randomUUID();
+  let upstream: WebSocket | null = null;
+  let upstreamReady = false;
+  let finishRequested = false;
+  const textQueue: string[] = [];
+  let resolveClosed: () => void = () => {};
+  const closed = new Promise<void>((resolve) => { resolveClosed = resolve; });
+  EdgeRuntime.waitUntil(closed);
+
+  function sendClient(body: unknown) {
+    try { if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(body)); } catch { /* ignore */ }
+  }
+  function closeBoth(code = 1000, reason = "") {
+    try { if (upstream && upstream.readyState === WebSocket.OPEN) upstream.close(); } catch { /* ignore */ }
+    try { if (socket.readyState === WebSocket.OPEN) socket.close(code, reason); } catch { /* ignore */ }
+    resolveClosed();
+  }
+  function sendContinue(text: string) {
+    if (!upstream || upstream.readyState !== WebSocket.OPEN || !text) return;
+    upstream.send(JSON.stringify({
+      header: { action: "continue-task", task_id: taskId, streaming: "duplex" },
+      payload: { input: { text } },
+    }));
+  }
+  function sendFinish() {
+    if (!upstream || upstream.readyState !== WebSocket.OPEN) return;
+    upstream.send(JSON.stringify({
+      header: { action: "finish-task", task_id: taskId, streaming: "duplex" },
+      payload: { input: {} },
+    }));
+  }
+
+  socket.onopen = async () => {
+    try {
+      const { identity, isUser } = await identifyCaller(req, admin, clientToken);
+      await bumpUsageOrThrow(admin, identity, isUser, "tts_stream");
+      upstream = new WebSocket(ASR_WS_URL, {
+        headers: { Authorization: `Bearer ${DASHSCOPE_KEY}`, "user-agent": "ai-mianjing-edge-tts" },
+      } as any);
+      upstream.binaryType = "arraybuffer";
+      upstream.onopen = () => {
+        upstream!.send(JSON.stringify({
+          header: { action: "run-task", task_id: taskId, streaming: "duplex" },
+          payload: {
+            task_group: "audio",
+            task: "tts",
+            function: "SpeechSynthesizer",
+            model: TTS_STREAM_MODEL,
+            parameters: { text_type: "PlainText", voice, format: "pcm", sample_rate: TTS_STREAM_SAMPLE_RATE, volume: 70, rate: 1, pitch: 1 },
+            input: {},
+          },
+        }));
+      };
+      upstream.onmessage = (event) => {
+        // 二进制即音频流，直接透传给浏览器
+        if (typeof event.data !== "string") {
+          try { if (socket.readyState === WebSocket.OPEN) socket.send(event.data); } catch { /* ignore */ }
+          return;
+        }
+        let msg: any = null;
+        try { msg = JSON.parse(event.data); } catch { return; }
+        const ev = msg?.header?.event;
+        if (ev === "task-started") {
+          upstreamReady = true;
+          sendClient({ type: "ready", sampleRate: TTS_STREAM_SAMPLE_RATE });
+          while (textQueue.length) sendContinue(textQueue.shift()!);
+          if (finishRequested) sendFinish();
+          return;
+        }
+        if (ev === "task-finished") { sendClient({ type: "done" }); closeBoth(); return; }
+        if (ev === "task-failed") {
+          sendClient({ type: "error", error: msg?.header?.error_message || "语音合成失败" });
+          closeBoth(1011, "upstream failed");
+        }
+        // result-generated（含时间戳）无需转发，前端只用音频
+      };
+      upstream.onerror = () => { sendClient({ type: "error", error: "语音合成连接失败" }); closeBoth(1011, "upstream error"); };
+      upstream.onclose = () => { if (socket.readyState === WebSocket.OPEN) sendClient({ type: "done" }); resolveClosed(); };
+    } catch (err) {
+      sendClient({ type: "error", error: (err as Error).message || "语音合成初始化失败" });
+      closeBoth(1011, "init failed");
+    }
+  };
+
+  socket.onmessage = (event) => {
+    if (typeof event.data !== "string") return; // TTS 客户端只发文本
+    let msg: any = {};
+    try { msg = JSON.parse(event.data); } catch { return; }
+    if (msg?.type === "text") {
+      const text = String(msg.text ?? "").slice(0, 600);
+      if (upstreamReady) sendContinue(text); else textQueue.push(text);
+    } else if (msg?.type === "finish") {
+      if (upstreamReady) sendFinish(); else finishRequested = true;
+    }
   };
   socket.onerror = () => closeBoth(1011, "client error");
   socket.onclose = () => { closeBoth(); };

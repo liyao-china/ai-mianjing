@@ -64,6 +64,12 @@
     @keyframes ivBreathe { 0%,100%{ transform:translateY(0) scale(1);} 50%{ transform:translateY(1.4px) scale(1.014);} }
     @keyframes ivNod { 0%,100%{ transform:translateY(0) rotate(0);} 42%{ transform:translateY(2.2px) rotate(.7deg);} 72%{ transform:translateY(.6px) rotate(-.5deg);} }
     @media (prefers-reduced-motion: reduce){ #ivBody, #ivAvatar.iv-speaking #ivHeadTop { animation:none; } }
+    /* 照片头像：呼吸在外层，说话时的“下颌律动”用内层 img 的 scaleY（音量驱动），两层叠加不冲突 */
+    #ivPhotoWrap { transform-origin:50% 60%; animation: ivPhotoBreathe 4.6s ease-in-out infinite; will-change:transform; }
+    #ivPhoto { transform-origin:50% 18%; transition:transform .06s linear, filter .5s ease; }
+    #ivStageBox.iv-photo-thinking #ivPhoto { filter:brightness(.94) saturate(.92); }
+    @keyframes ivPhotoBreathe { 0%,100%{ transform:translateY(0) scale(1.0);} 50%{ transform:translateY(-1px) scale(1.012);} }
+    @media (prefers-reduced-motion: reduce){ #ivPhotoWrap { animation:none; } }
     .speaking-ring { animation:pulseRing 2.2s ease-out infinite; }
   </style>
 </head>
@@ -102,7 +108,11 @@
     </div>
     <div class="relative flex flex-col items-center">
       <div id="speakerRing" class="absolute inset-0 rounded-full bg-indigo/20 speaking-ring hidden"></div>
-      <div class="interviewer-avatar relative rounded-full shadow-softlg border border-white/80 overflow-hidden">
+      <div id="ivStageBox" class="interviewer-avatar relative rounded-full shadow-softlg border border-white/80 overflow-hidden">
+        <div id="ivPhotoWrap" class="absolute inset-0 hidden">
+          <img id="ivPhoto" alt="AI 面试官" class="w-full h-full object-cover" style="object-position:center 28%">
+          <div id="ivPhotoGlow" class="absolute inset-x-0 bottom-0 h-1/3 pointer-events-none" style="opacity:0;background:radial-gradient(ellipse at 50% 100%, rgba(99,102,241,.45), transparent 70%)"></div>
+        </div>
         <svg id="ivAvatar" viewBox="0 0 240 240" class="w-full h-full" aria-label="AI 面试官">
           <defs>
             <clipPath id="ivClip"><circle cx="120" cy="120" r="120"/></clipPath>
@@ -533,41 +543,62 @@ ${roleGuide ? roleGuide + '\n' : ''}
       if(r) r.classList.toggle('hidden', !speaking);
     }
 
-    // ===== 拟真面试官形象控制：说话动嘴 / 点头 / 呼吸 / 眨眼 / 思考·聆听 =====
+    // ===== 拟真面试官形象控制：照片底图(按轮次切换) + 矢量兜底；说话动嘴/律动、点头、呼吸、眨眼、思考·聆听 =====
     const avatar = (function(){
       const root=document.getElementById('ivAvatar');
-      if(!root) return { setMode(){} };
+      if(!root) return { setMode(){}, pushTalkLevel(){}, hasPhoto:false };
       const mouth=document.getElementById('ivMouthG');
       const pupilL=document.getElementById('ivPupilL'), pupilR=document.getElementById('ivPupilR');
       const lidL=document.getElementById('ivLidL'), lidR=document.getElementById('ivLidR');
       const glow=document.getElementById('ivGlow');
+      const box=document.getElementById('ivStageBox');
+      const photoWrap=document.getElementById('ivPhotoWrap'), photoImg=document.getElementById('ivPhoto'), photoGlow=document.getElementById('ivPhotoGlow');
       const baseL={x:100,y:105}, baseR={x:140,y:105};
       let talkRAF=0, blinkTimer=0, gazeTimer=0, mode='idle';
+      let usingPhoto=false, lastLevel=0, lastLevelTs=0;
+
+      // 按本轮人设载入照片头像；加载失败则保留矢量形象
+      (function loadPhoto(){
+        try{
+          const key=(typeof roundKey!=='undefined' && ['mentor','leader','director','hr'].includes(roundKey)) ? roundKey : 'mentor';
+          photoImg.onload=()=>{ usingPhoto=true; photoWrap.classList.remove('hidden'); root.classList.add('opacity-0'); root.style.display='none'; };
+          photoImg.onerror=()=>{ usingPhoto=false; photoWrap.classList.add('hidden'); };
+          photoImg.src='assets/interviewer_'+key+'.png';
+        }catch(e){ usingPhoto=false; }
+      })();
+
       const setMouth=v=>{ if(mouth) mouth.style.transform='scaleY('+v.toFixed(3)+')'; };
+      const setPhotoTalk=v=>{ // v:0..1 → 轻微下颌起伏 + 嘴部柔光
+        if(photoImg) photoImg.style.transform='scaleY('+(1+v*0.018).toFixed(4)+')';
+        if(photoGlow) photoGlow.style.opacity=(v*0.7).toFixed(3);
+      };
       const setPupils=(dx,dy)=>{
         if(pupilL){ pupilL.setAttribute('cx', baseL.x+dx); pupilL.setAttribute('cy', baseL.y+dy); }
         if(pupilR){ pupilR.setAttribute('cx', baseR.x+dx); pupilR.setAttribute('cy', baseR.y+dy); }
       };
+      // 统一的“张口强度” 0..1：同时驱动矢量嘴型与照片律动
+      function applyTalk(v){ v=Math.max(0,Math.min(1,v)); setMouth(0.12+v*0.78); if(usingPhoto) setPhotoTalk(v); }
       function blinkOnce(){
         [lidL,lidR].forEach(l=>{ if(l) l.style.transform='scaleY(1)'; });
         setTimeout(()=>{ [lidL,lidR].forEach(l=>{ if(l) l.style.transform='scaleY(0)'; }); }, 95);
       }
-      function scheduleBlink(){ clearTimeout(blinkTimer); blinkTimer=setTimeout(()=>{ blinkOnce(); scheduleBlink(); }, 2200+Math.random()*3600); }
-      function startTalk(){
+      function scheduleBlink(){ clearTimeout(blinkTimer); blinkTimer=setTimeout(()=>{ if(!usingPhoto) blinkOnce(); scheduleBlink(); }, 2200+Math.random()*3600); }
+      function startTalk(){ // 无音量数据时的合成口型；一旦有真实音量(pushTalkLevel)则让位给真实值
         cancelAnimationFrame(talkRAF); let t=0;
         const loop=()=>{
+          if(Date.now()-lastLevelTs < 220){ talkRAF=requestAnimationFrame(loop); return; } // 最近有真实音量，跳过合成
           t+=0.34;
           let v=0.5+0.32*Math.sin(t)+0.16*Math.sin(t*2.3+1)+0.08*(Math.random()-0.5);
-          setMouth(Math.max(0.12, Math.min(0.95, v)));
+          applyTalk(Math.max(0.12, Math.min(0.95, v)));
           talkRAF=requestAnimationFrame(loop);
         };
         loop();
       }
-      function stopTalk(){ cancelAnimationFrame(talkRAF); talkRAF=0; setMouth(0.16); }
+      function stopTalk(){ cancelAnimationFrame(talkRAF); talkRAF=0; applyTalk(0); }
       function idleGaze(){
         clearTimeout(gazeTimer);
         gazeTimer=setTimeout(()=>{
-          if(mode==='listening'){ setPupils((Math.random()-0.5)*3, (Math.random()-0.5)*2); setTimeout(()=>{ if(mode==='listening') setPupils(0,0); }, 900); }
+          if(mode==='listening' && !usingPhoto){ setPupils((Math.random()-0.5)*3, (Math.random()-0.5)*2); setTimeout(()=>{ if(mode==='listening') setPupils(0,0); }, 900); }
           idleGaze();
         }, 2600+Math.random()*2600);
       }
@@ -575,6 +606,7 @@ ${roleGuide ? roleGuide + '\n' : ''}
         if(m===mode && m!=='speaking') return;
         mode=m;
         root.classList.toggle('iv-speaking', m==='speaking');
+        if(box) box.classList.toggle('iv-photo-thinking', m==='thinking');
         if(glow){ glow.style.transition='opacity .5s ease'; glow.style.opacity = (m==='thinking') ? '0.5' : '0'; }
         if(m==='speaking'){ setPupils(0,0); startTalk(); clearTimeout(gazeTimer); }
         else { stopTalk(); }
@@ -582,14 +614,29 @@ ${roleGuide ? roleGuide + '\n' : ''}
         else if(m==='listening'){ setPupils(0,0); idleGaze(); }                    // 注视镜头＋偶尔自然游移
         else if(m==='idle'){ setPupils(0,0); clearTimeout(gazeTimer); }
       }
-      scheduleBlink(); setMouth(0.16);
-      return { setMode };
+      // 由流式 TTS 的 analyser 实时调用（v:0..1 的音量包络）
+      function pushTalkLevel(v){
+        lastLevel=v; lastLevelTs=Date.now();
+        if(mode==='speaking') applyTalk(0.15+v*0.85);
+      }
+      scheduleBlink(); applyTalk(0);
+      return { setMode, pushTalkLevel, get hasPhoto(){ return usingPhoto; } };
     })();
 
     // ===== AI 语音播报 (TTS) =====
-    // 首选：qwen3-tts-flash 拟人语音（经服务端代理）；失败时回退浏览器自带 TTS
-    const TTS_VOICE = "Cherry"; // 可选：Cherry(活泼女声)/Serena(温柔女声)/Ethan(沉稳男声)/Chelsie(知性女声)
-    let ttsAudio = null, ttsSeq = 0, ttsWarned = false;
+    // 首选：CosyVoice 流式语音（边合成边播，首包 200-800ms）；失败回退 qwen3-tts-flash 单句合成；再失败回退浏览器朗读
+    // 按面试轮次选择与形象性别匹配的音色：stream=CosyVoice 音色，http=qwen 兜底音色
+    const ROUND_VOICE = {
+      mentor:   { stream:'longcheng_v2',    http:'Ethan'   }, // 业务一面：男声
+      leader:   { stream:'longxiaochun_v2', http:'Serena'  }, // 业务负责人：女声
+      director: { stream:'longshu_v2',      http:'Ethan'   }, // 总监：男声
+      hr:       { stream:'longxiaochun_v2', http:'Chelsie' }, // HR：女声
+    };
+    const _roundVoice = ROUND_VOICE[roundKey] || ROUND_VOICE.mentor;
+    const TTS_VOICE = _roundVoice.http;            // qwen3-tts-flash 兜底音色（可选 Cherry/Serena/Ethan/Chelsie）
+    const TTS_STREAM_VOICE = _roundVoice.stream;   // CosyVoice 流式音色
+    const TTS_STREAM_RATE = 24000;                 // 与 Edge 端 sample_rate 一致
+    let ttsAudio = null, ttsSeq = 0, ttsWarned = false, ttsStreamStop = null;
 
     let preferredVoice=null;
     function selectPreferredVoice(){
@@ -624,9 +671,75 @@ ${roleGuide ? roleGuide + '\n' : ''}
     }
     function stopSpeaking(){
       ttsSeq++;
+      if(ttsStreamStop){ try{ ttsStreamStop(); }catch(e){} ttsStreamStop=null; }
       if(ttsAudio){ ttsAudio.pause(); ttsAudio.src=''; ttsAudio=null; }
       if('speechSynthesis' in window) window.speechSynthesis.cancel();
       avatar.setMode('listening');
+    }
+
+    // 流式 TTS：把整段文本发给 CosyVoice 代理，逐块接收 PCM 并用 Web Audio 边收边播；
+    // analyser 实时算音量包络驱动“嘴型/律动”。返回 Promise<boolean>（是否成功发声）。
+    // 2.6s 内拿不到首个音频块 → 放弃返回 false，由调用方走单句兜底，避免体感卡顿。
+    function ttsStreamSpeak(fullText, seq){
+      return new Promise((resolve)=>{
+        if(!window.AIProxy || !AIProxy.ttsStreamUrl || !(window.AudioContext||window.webkitAudioContext)){ resolve(false); return; }
+        let ws=null, ac=null, analyser=null, rafId=0, nextTime=0, leftover=null;
+        let gotAudio=false, settled=false;
+        const td = new Float32Array(256);
+        function cleanup(){ try{ws&&ws.close();}catch(e){} cancelAnimationFrame(rafId); try{ac&&ac.state!=='closed'&&ac.close();}catch(e){} if(ttsStreamStop===stop) ttsStreamStop=null; }
+        function done(ok){ if(settled) return; settled=true; clearTimeout(guard); cleanup(); resolve(ok); }
+        function stop(){ done(gotAudio); }
+        ttsStreamStop = stop;
+        const guard = setTimeout(()=>{ if(!gotAudio) done(false); }, 2600);
+        function meter(){
+          if(!analyser){ return; }
+          analyser.getFloatTimeDomainData(td);
+          let s=0; for(let i=0;i<td.length;i++) s+=td[i]*td[i];
+          avatar.pushTalkLevel(Math.min(1, Math.sqrt(s/td.length)*3.4));
+          rafId=requestAnimationFrame(meter);
+        }
+        function pushPcm(ab){
+          let bytes=new Uint8Array(ab);
+          if(leftover){ const m=new Uint8Array(leftover.length+bytes.length); m.set(leftover,0); m.set(bytes,leftover.length); bytes=m; leftover=null; }
+          const n=bytes.length-(bytes.length%2);
+          if(n<bytes.length){ leftover=bytes.slice(n); }
+          if(n<=0) return;
+          const dv=new DataView(bytes.buffer, bytes.byteOffset, n);
+          const len=n/2; const f=new Float32Array(len);
+          for(let i=0;i<len;i++){ f[i]=dv.getInt16(i*2,true)/32768; }
+          const audioBuf=ac.createBuffer(1, len, TTS_STREAM_RATE);
+          audioBuf.copyToChannel(f,0);
+          const src=ac.createBufferSource(); src.buffer=audioBuf; src.connect(analyser);
+          const t=Math.max(ac.currentTime+0.02, nextTime); src.start(t); nextTime=t+audioBuf.duration;
+        }
+        try{
+          ac=new (window.AudioContext||window.webkitAudioContext)();
+          analyser=ac.createAnalyser(); analyser.fftSize=256;
+          const gain=ac.createGain(); gain.gain.value=1.0; analyser.connect(gain); gain.connect(ac.destination);
+          nextTime=ac.currentTime;
+          ws=new WebSocket(AIProxy.ttsStreamUrl(TTS_STREAM_VOICE)); ws.binaryType='arraybuffer';
+        }catch(e){ done(false); return; }
+        ws.onmessage=(ev)=>{
+          if(seq!==ttsSeq){ done(gotAudio); return; }
+          if(typeof ev.data==='string'){
+            let m={}; try{ m=JSON.parse(ev.data); }catch(e){}
+            if(m.type==='ready'){
+              if(ac.state==='suspended'){ ac.resume().catch(()=>{}); }
+              meter();
+              try{ ws.send(JSON.stringify({type:'text', text:fullText})); ws.send(JSON.stringify({type:'finish'})); }catch(e){}
+            } else if(m.type==='done'){
+              const remainMs=Math.max(0,(nextTime-ac.currentTime))*1000;
+              setTimeout(()=>done(gotAudio), remainMs+150);
+            } else if(m.type==='error'){
+              done(gotAudio);
+            }
+            return;
+          }
+          gotAudio=true; clearTimeout(guard); pushPcm(ev.data); // 二进制 = PCM 音频块
+        };
+        ws.onerror=()=>done(gotAudio);
+        ws.onclose=()=>{ if(!settled){ const remainMs=Math.max(0,(nextTime-(ac?ac.currentTime:0)))*1000; setTimeout(()=>done(gotAudio), remainMs+150); } };
+      });
     }
     // 合成单句音频，返回可播放的 https 地址（失败返回 null）
     async function synthSentence(s){
@@ -676,24 +789,30 @@ ${roleGuide ? roleGuide + '\n' : ''}
         if(typed>=fullText.length){ clearInterval(typer); typer=null; if(typingEl && typingEl.parentNode) typingEl.remove(); }
       }, 26);
 
-      // ② 语音：首句优先 + 后续并行预取；单句在线 TTS 超时即用本机朗读兜底（嘴型动画同步进行）
-      const sentences = splitSentences(fullText);
+      // ② 语音：优先走 CosyVoice 流式（边收边播，最低延迟、音量驱动嘴型）
       let anyVoice=false;
-      const playAudioUrl=(url)=>new Promise(resolve=>{
-        ttsAudio = new Audio(url);
-        let done=false; const finish=()=>{ if(!done){ done=true; resolve(); } };
-        ttsAudio.onended = finish; ttsAudio.onerror = finish;
-        ttsAudio.play().catch(finish);
-      });
-      let nextUrlP = synthSentence(sentences[0]); // 预取第一句，缩短首声延迟
-      for(let i=0;i<sentences.length;i++){
-        if(seq!==ttsSeq){ finalizeText(); avatar.setMode('listening'); return; } // 被用户打断
-        const pending = nextUrlP;
-        nextUrlP = (i+1<sentences.length) ? synthSentence(sentences[i+1]) : Promise.resolve(null); // 并行预取下一句
-        const url = await withTimeout(pending, TTS_SENTENCE_WAIT_MS, null);
-        if(seq!==ttsSeq){ finalizeText(); avatar.setMode('listening'); return; }
-        if(url){ anyVoice=true; await playAudioUrl(url); }
-        else { const ok = await speakBrowserSentence(sentences[i]); if(ok) anyVoice=true; } // 在线慢/失败 → 本机朗读这一句
+      anyVoice = await ttsStreamSpeak(fullText, seq);
+      if(seq!==ttsSeq){ finalizeText(); avatar.setMode('listening'); return; } // 被用户打断
+
+      // ③ 流式不可用/失败 → 单句在线合成兜底：首句优先 + 后续并行预取，单句超时再用本机朗读
+      if(!anyVoice){
+        const sentences = splitSentences(fullText);
+        const playAudioUrl=(url)=>new Promise(resolve=>{
+          ttsAudio = new Audio(url);
+          let done=false; const finish=()=>{ if(!done){ done=true; resolve(); } };
+          ttsAudio.onended = finish; ttsAudio.onerror = finish;
+          ttsAudio.play().catch(finish);
+        });
+        let nextUrlP = synthSentence(sentences[0]); // 预取第一句，缩短首声延迟
+        for(let i=0;i<sentences.length;i++){
+          if(seq!==ttsSeq){ finalizeText(); avatar.setMode('listening'); return; }
+          const pending = nextUrlP;
+          nextUrlP = (i+1<sentences.length) ? synthSentence(sentences[i+1]) : Promise.resolve(null); // 并行预取下一句
+          const url = await withTimeout(pending, TTS_SENTENCE_WAIT_MS, null);
+          if(seq!==ttsSeq){ finalizeText(); avatar.setMode('listening'); return; }
+          if(url){ anyVoice=true; await playAudioUrl(url); }
+          else { const ok = await speakBrowserSentence(sentences[i]); if(ok) anyVoice=true; } // 在线慢/失败 → 本机朗读这一句
+        }
       }
       if(seq!==ttsSeq){ finalizeText(); avatar.setMode('listening'); return; }
       finalizeText();
