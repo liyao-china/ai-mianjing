@@ -100,9 +100,11 @@
     const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     let history = [];
+    let currentUserId = null;
 
     async function loadHistory(){
       const { data: { user } } = await supabaseClient.auth.getUser();
+      currentUserId = user ? user.id : null;
       if(user){
         // 已登录：读云端
         const { data, error } = await supabaseClient
@@ -131,6 +133,7 @@
         document.getElementById('emptyState').classList.remove('hidden');
         document.getElementById('trendPanel').classList.add('hidden');
         document.getElementById('dimPanel').classList.add('hidden');
+        const list=document.getElementById('historyList'); if(list) list.innerHTML='';
       } else {
         renderStats(); renderTrend(); renderHistory();
       }
@@ -205,6 +208,7 @@
           <div class="flex items-center gap-3">
             <span class="text-lg font-bold" style="color:${c}">${r.totalScore}</span>
             ${r.video_url?'<button class="del-video text-xs px-2.5 py-1 rounded-lg border border-red-200 text-red-500 hover:bg-red-50 transition" title="删除这条面试录像">🗑 删录像</button>':''}
+            <button class="del-record text-xs px-2.5 py-1 rounded-lg border border-red-200 text-red-500 hover:bg-red-50 transition" title="删除整条记录及其知识库条目">🗑 删记录</button>
             <span class="text-gray-300 text-sm">查看报告 →</span>
           </div>`;
         // 行内"删录像"按钮：只删视频，保留报告与评分
@@ -217,6 +221,22 @@
             const ok=await deleteRecordVideo(r);
             if(ok){ r.video_url=null; renderHistory(); }
             else { delBtn.disabled=false; delBtn.textContent='🗑 删录像'; alert('删除失败，请稍后再试。'); }
+          });
+        }
+        // 行内"删记录"按钮：删除整条报告 + 同步删除知识库里对应的报告条目（避免孤儿）
+        const delRecBtn=el.querySelector('.del-record');
+        if(delRecBtn){
+          delRecBtn.addEventListener('click', async (ev)=>{
+            ev.stopPropagation();
+            if(!confirm('确定删除整条面试记录吗？将同时删除报告、评分、录像及知识库里关联的这条记录，删除后无法恢复。')) return;
+            delRecBtn.disabled=true; delRecBtn.textContent='删除中…';
+            const ok=await deleteRecord(r);
+            if(ok){
+              history=history.filter(x=>x!==r);
+              initPage();
+            } else {
+              delRecBtn.disabled=false; delRecBtn.textContent='🗑 删记录'; alert('删除失败，请稍后再试。');
+            }
           });
         }
         list.appendChild(el);
@@ -248,6 +268,47 @@
         }
         return true;
       }catch(e){ console.warn('删除录像异常', e); return false; }
+    }
+
+    // 这条报告在知识库里可能用到的 source_ref（云端用记录 id，本地兜底用 created_at/date）
+    function knowledgeRefsOf(r){
+      return [r.id, r.created_at, r.date].filter(Boolean).map(String);
+    }
+    // 删除知识库里与该报告关联的条目（云端 + 本地双删，避免孤儿）
+    async function deleteLinkedKnowledge(r){
+      const refs = knowledgeRefsOf(r);
+      if(currentUserId){
+        try{
+          const { error }=await supabaseClient.from('knowledge_items')
+            .delete().eq('user_id', currentUserId).eq('source','report').in('source_ref', refs);
+          if(error) console.warn('云端知识条目删除失败', error);
+        }catch(e){ console.warn('云端知识条目删除异常', e); }
+      }
+      try{
+        const key=`aimianjing:${currentUserId || 'anon'}:knowledgeItems`;
+        const arr=JSON.parse(localStorage.getItem(key) || '[]');
+        const left=arr.filter(it=> !(it && it.source==='report' && refs.includes(String(it.source_ref))));
+        if(left.length!==arr.length) localStorage.setItem(key, JSON.stringify(left));
+      }catch(e){ console.warn('本地知识条目删除异常', e); }
+    }
+    // 删除整条记录：录像 + 报告记录 + 关联知识条目（云端/本地都兼容）
+    async function deleteRecord(r){
+      try{
+        if(r.video_url){ try{ await deleteRecordVideo(r); }catch(e){ console.warn('删除录像异常', e); } }
+        await deleteLinkedKnowledge(r);
+        if(r.id && currentUserId){
+          const { error }=await supabaseClient.from('interview_records').delete().eq('id', r.id);
+          if(error){ console.warn('删除云端记录失败', error); return false; }
+        }
+        // 本地历史一并清理（无论云端与否，避免本地缓存残留）
+        try{
+          const h=JSON.parse(localStorage.getItem('interviewHistory')||'[]');
+          const refs=knowledgeRefsOf(r);
+          const left=h.filter(item=> !((r.id && String(item.id)===String(r.id)) || refs.includes(String(item.created_at)) || refs.includes(String(item.date))));
+          if(left.length!==h.length) localStorage.setItem('interviewHistory', JSON.stringify(left));
+        }catch(e){ console.warn('本地历史清理异常', e); }
+        return true;
+      }catch(e){ console.warn('删除记录异常', e); return false; }
     }
   </script>
 </body>

@@ -6,6 +6,8 @@
   <title>简历管理 - AI面镜</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
   <script>
     tailwind.config = { theme: { extend: {
       colors: { indigo: { DEFAULT:'#6366F1' }, brandgreen:'#10B981', brandorange:'#F59E0B' },
@@ -33,6 +35,7 @@
       </a>
       <div class="flex items-center gap-4 text-sm">
         <a href="专项训练.html" class="text-gray-500 hover:text-indigo">专项训练</a>
+        <a href="知识库.html" class="text-gray-500 hover:text-indigo">知识库</a>
         <a href="个人中心.html" class="text-gray-500 hover:text-indigo">个人中心</a>
         <button onclick="location.href='配置页.html'" class="gradient-btn text-white font-medium px-5 py-2 rounded-lg">+ 新面试</button>
       </div>
@@ -66,6 +69,9 @@
         <label class="text-sm text-gray-600">目标岗位
           <input id="onlineJob" class="mt-1 w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-indigo focus:outline-none" placeholder="如：AI产品经理" />
         </label>
+        <label class="text-sm text-gray-600">目标公司 / 行业
+          <input id="onlineCompanies" class="mt-1 w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-indigo focus:outline-none" placeholder="如：字节跳动、阿里、AI创业公司" />
+        </label>
         <label class="text-sm text-gray-600">工作年限
           <input id="onlineYears" class="mt-1 w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-indigo focus:outline-none" placeholder="如：3年" />
         </label>
@@ -73,6 +79,13 @@
           <input id="onlineSkills" class="mt-1 w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-indigo focus:outline-none" placeholder="如：RAG、产品设计、数据分析" />
         </label>
       </div>
+      <label class="mt-4 flex items-center justify-between gap-4 rounded-2xl bg-indigo/5 border border-indigo/10 px-4 py-3">
+        <div>
+          <div class="text-sm font-medium text-gray-700">每周自动搜集外部面经情报</div>
+          <p class="text-xs text-gray-400 mt-0.5">第二期定时任务会根据目标岗位、公司和关键词自动补充到知识库。</p>
+        </div>
+        <input id="weeklyCollectEnabled" type="checkbox" class="w-5 h-5 accent-indigo" />
+      </label>
       <label class="block text-sm text-gray-600 mt-4">经历与优势摘要
         <textarea id="onlineSummary" rows="7" class="mt-1 w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-indigo focus:outline-none resize-y" placeholder="填写教育、工作经历、项目成果与个人优势"></textarea>
       </label>
@@ -119,13 +132,14 @@
     const MAX_VERSIONS=5;
     const fields={
       name:document.getElementById('onlineName'), job:document.getElementById('onlineJob'),
+      companies:document.getElementById('onlineCompanies'),
       years:document.getElementById('onlineYears'), skills:document.getElementById('onlineSkills'),
       summary:document.getElementById('onlineSummary')
     };
 
     function readJSON(key,fallback){ try{return JSON.parse(localStorage.getItem(key)||JSON.stringify(fallback));}catch(e){return fallback;} }
     function buildOnlineText(data){
-      return [`姓名：${data.name||'未填写'}`,`目标岗位：${data.job||'未填写'}`,`工作年限：${data.years||'未填写'}`,
+      return [`姓名：${data.name||'未填写'}`,`目标岗位：${data.job||'未填写'}`,`目标公司/行业：${data.companies||'未填写'}`,`工作年限：${data.years||'未填写'}`,
         `核心技能：${data.skills||'未填写'}`,'','经历与优势摘要：',data.summary||'未填写'].join('\n');
     }
     function getVersions(){ return readJSON('resumeVersions',[]); }
@@ -139,14 +153,48 @@
     function loadOnline(){
       const data=readJSON('onlineResume',{});
       Object.entries(fields).forEach(([key,el])=>el.value=data[key]||'');
+      document.getElementById('weeklyCollectEnabled').checked = data.weekly_collect_enabled === true;
     }
     function saveOnline(useAsCurrent=false){
       const data={}; Object.entries(fields).forEach(([key,el])=>data[key]=el.value.trim());
+      data.weekly_collect_enabled = document.getElementById('weeklyCollectEnabled').checked;
       data.updatedAt=new Date().toISOString();
       localStorage.setItem('onlineResume',JSON.stringify(data));
       if(data.job) localStorage.setItem('targetJob',data.job);
+      // 作为私有知识库和面试页的统一背景来源；知识库页会优先读取这里生成的上下文
+      const profile = {
+        target_role:data.job || '',
+        target_companies:data.companies || '',
+        background:[data.years, data.summary].filter(Boolean).join('；'),
+        keywords:data.skills || '',
+        weekly_collect_enabled:data.weekly_collect_enabled === true,
+        updated_at:data.updatedAt,
+      };
+      localStorage.setItem('ragProfile', JSON.stringify(profile));
+      // 登录用户：同步到云端 user_profiles，作为跨设备/出题/第二期自动搜集的统一数据源
+      syncProfileToCloud(profile);
       if(useAsCurrent || localStorage.getItem('activeResumeId')==='online') setCurrent('online','在线简历',buildOnlineText(data));
       showStatus('在线简历已保存。','success');
+    }
+    // 把目标岗位/背景/关键词 upsert 到 user_profiles（失败不影响本地保存）
+    async function syncProfileToCloud(profile){
+      try{
+        if(!(window.supabase && window.SUPABASE_URL && window.SUPABASE_KEY)) return;
+        if(!window.__sbClient) window.__sbClient = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_KEY);
+        const sb = window.__sbClient;
+        const { data:{ user } } = await sb.auth.getUser();
+        if(!user) return;
+        const { error } = await sb.from('user_profiles').upsert({
+          user_id:user.id,
+          target_role:profile.target_role || null,
+          target_companies:profile.target_companies || null,
+          background:profile.background || null,
+          keywords:profile.keywords || null,
+          weekly_collect_enabled:profile.weekly_collect_enabled === true,
+          updated_at:new Date().toISOString(),
+        }, { onConflict:'user_id' });
+        if(error) console.warn('user_profiles 云端同步失败：', error);
+      }catch(e){ console.warn('user_profiles 云端同步异常：', e); }
     }
     function showStatus(text,type='info'){
       const el=document.getElementById('uploadStatus'); el.textContent=text; el.classList.remove('hidden','bg-green-50','text-brandgreen','bg-orange-50','text-brandorange','bg-indigo/5','text-indigo');

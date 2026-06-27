@@ -137,6 +137,26 @@
       <div class="space-y-3" id="suggestions"></div>
     </div>
 
+    <div id="growthMemorySection" class="bg-white rounded-2xl shadow-soft p-7 mb-6 hidden">
+      <h2 class="text-lg font-bold mb-1 flex items-center gap-2">📈 历史弱项追踪</h2>
+      <p class="text-xs text-gray-400 mb-4">结合你过往模拟报告，判断这次是否进步、哪些问题仍在重复，以及下次应该重点训练什么。</p>
+      <div class="grid md:grid-cols-3 gap-4">
+        <div class="bg-indigo/5 rounded-xl p-4">
+          <div class="text-xs font-semibold text-indigo mb-2">本次主要弱项</div>
+          <div id="weaknessTags" class="flex flex-wrap gap-1.5"></div>
+        </div>
+        <div class="bg-amber-50 rounded-xl p-4">
+          <div class="text-xs font-semibold text-amber-700 mb-2">持续改进目标</div>
+          <ul id="improvementGoals" class="space-y-1.5"></ul>
+        </div>
+        <div class="bg-emerald-50 rounded-xl p-4">
+          <div class="text-xs font-semibold text-brandgreen mb-2">下次建议追问</div>
+          <ul id="nextProbeSuggestions" class="space-y-1.5"></ul>
+        </div>
+      </div>
+      <div id="historicalProgress" class="mt-4 bg-gray-50 rounded-xl p-4 text-sm text-gray-600 leading-relaxed"></div>
+    </div>
+
     <div class="mb-6">
       <h2 class="text-lg font-bold mb-4 px-1">📋 逐题详细点评</h2>
       <div class="space-y-3" id="questionList"></div>
@@ -388,7 +408,7 @@
       result.questions=normalizeQuestionRows(result.questions);
       result.bonus=Array.isArray(result.bonus)?result.bonus.slice(0,6):[];
       result.penalty=Array.isArray(result.penalty)?result.penalty.slice(0,6):[];
-      return result;
+      return normalizeReportLearningFields(result);
     }
 
     function escapeHtml(value){
@@ -410,6 +430,70 @@
       });
     }
 
+    const DIM_LABELS = { jobMatch:'岗位匹配度', logic:'逻辑清晰度', fluency:'语言流畅度', depth:'专业深度', confidence:'自信心', value:'价值表达' };
+    function normalizeReportLearningFields(result){
+      result.weakness_tags = Array.isArray(result.weakness_tags) ? result.weakness_tags.map(String).map(s=>s.trim()).filter(Boolean).slice(0,8) : [];
+      result.improvement_goals = Array.isArray(result.improvement_goals) ? result.improvement_goals.map(String).map(s=>s.trim()).filter(Boolean).slice(0,5) : [];
+      result.next_probe_suggestions = Array.isArray(result.next_probe_suggestions) ? result.next_probe_suggestions.map(String).map(s=>s.trim()).filter(Boolean).slice(0,5) : [];
+      const hp = result.historical_progress && typeof result.historical_progress === 'object' ? result.historical_progress : {};
+      result.historical_progress = {
+        summary: String(hp.summary || '').slice(0,160),
+        improved: Array.isArray(hp.improved) ? hp.improved.map(String).slice(0,5) : [],
+        repeated_weaknesses: Array.isArray(hp.repeated_weaknesses) ? hp.repeated_weaknesses.map(String).slice(0,5) : [],
+      };
+      return result;
+    }
+    function summarizeHistoricalRecords(records, knowledgeItems){
+      const dimCounts = {};
+      const snippets = [];
+      const add = (label) => { if(label) dimCounts[label]=(dimCounts[label]||0)+1; };
+      (records || []).slice(0,6).forEach((r, idx)=>{
+        const report = r.report || {};
+        const scores = r.scores || report.scores || {};
+        Object.entries(scores).forEach(([k,v])=>{
+          const n = Number(v);
+          if(Number.isFinite(n) && n < 72) add(DIM_LABELS[k] || k);
+        });
+        (report.weakness_tags || []).forEach(add);
+        const total = r.total_score ?? r.totalScore ?? '';
+        const suggestions = (report.suggestions || []).concat(report.improvement_goals || []).slice(0,4).join('；');
+        const probes = (report.next_probe_suggestions || []).slice(0,3).join('；');
+        const repeated = report.historical_progress?.repeated_weaknesses || [];
+        snippets.push(`历史${idx+1}：得分${total || '未知'}；低分/弱项：${Object.entries(scores).filter(([,v])=>Number(v)<72).map(([k])=>DIM_LABELS[k]||k).join('、') || (report.weakness_tags||[]).join('、') || '未明显记录'}；历史重复问题：${repeated.join('、') || '无'}；建议：${suggestions || '无'}；下次追问：${probes || '无'}`);
+      });
+      (knowledgeItems || []).slice(0,8).forEach((it, idx)=>{
+        const md = it.metadata || {};
+        (md.weakness_tags || []).forEach(add);
+        const text = [it.title, it.summary, (md.weakness_tags||[]).join('；'), (md.improvement_goals||[]).join('；'), (md.next_probe_suggestions||[]).join('；'), (md.historical_progress?.repeated_weaknesses||[]).join('；')].filter(Boolean).join('；');
+        if(text) snippets.push(`知识库报告${idx+1}：${text.slice(0,220)}`);
+      });
+      const repeated = Object.entries(dimCounts).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([k,c])=>`${k}(${c}次)`);
+      if(!snippets.length && !repeated.length) return '';
+      return [
+        repeated.length ? `【历史重复弱项统计】${repeated.join('、')}` : '',
+        snippets.length ? `【近期历史报告摘要】\n${snippets.slice(0,10).join('\n')}` : '',
+      ].filter(Boolean).join('\n').slice(0,2400);
+    }
+    async function loadHistoricalWeaknessContext(){
+      try{
+        const { data:{ user } } = await sb.auth.getUser();
+        if(!user){
+          const localHistory = JSON.parse(localStorage.getItem('interviewHistory') || '[]');
+          return summarizeHistoricalRecords(localHistory, []);
+        }
+        const [recordsRes, kbRes] = await Promise.allSettled([
+          sb.from('interview_records').select('created_at,total_score,scores,report').eq('user_id', user.id).order('created_at', { ascending:false }).limit(6),
+          sb.from('knowledge_items').select('title,summary,metadata,created_at').eq('user_id', user.id).eq('source','report').order('created_at', { ascending:false }).limit(8),
+        ]);
+        const records = recordsRes.status === 'fulfilled' && !recordsRes.value.error ? (recordsRes.value.data || []) : [];
+        const kb = kbRes.status === 'fulfilled' && !kbRes.value.error ? (kbRes.value.data || []) : [];
+        return summarizeHistoricalRecords(records, kb);
+      }catch(e){
+        console.warn('历史弱项上下文读取失败：', e);
+        return '';
+      }
+    }
+
     async function generateReport(attempt=0){
       // AI 产品经理专项评分参考（来自面试 skill 知识库），在调用时计算以确保 jobName 已就绪
       const roleRubric = /AI产品/.test(jobName)
@@ -417,10 +501,12 @@
         : '';
       let qaText='';
       qaRecords.forEach((r,i)=>{ qaText += `问题${i+1}：${r.question}\n候选人回答：${r.answer}\n\n`; });
+      const historicalContext = await loadHistoricalWeaknessContext();
       const prompt = `你是一位严格、专业的面试评分专家。请根据以下面试问答记录，对候选人（应聘${jobName}，${levelName}级别${meta.roundName?'，本场为'+meta.roundName:''}）进行专业评分。
 
 【面试问答记录】
 ${qaText}
+${historicalContext ? `【候选人历史弱项与过往报告摘要】\n${historicalContext}\n使用规则：只能用于判断这次是否进步、哪些短板重复出现、下次应该重点追问什么；不要机械复述历史文本，不要编造不存在的历史。\n` : ''}
 【评分维度与权重】
 1. 岗位匹配度(30%) 2. 逻辑清晰度(25%) 3. 语言流畅度(15%) 4. 专业深度(15%) 5. 自信心(10%) 6. 价值表达(5%)
 【评分标尺】请按真实校招/社招的通过标准打分，不要客气：60分=勉强及格存在明显短板，75分=达到该职级平均水平，85分以上=明显优于多数同职级候选人（必须有充分理由），95分以上原则上不给。回答空泛、缺乏具体案例和数据的，相应维度不应超过65分。${roleRubric}
@@ -429,8 +515,13 @@ ${qaText}
 - 隐性减分（如：贬低前公司/前同事、明显在背模板套话、对成果含糊其辞疑似注水、态度傲慢或过度自卑、答非所问、前后矛盾）。
 没有明显证据的就返回空数组，不要硬凑、不要编造。
 【要求】每个维度0-100分；给3条整体改进建议；questions 数组必须严格按题目顺序、每道题对应一项（共 ${qaRecords.length} 题就返回 ${qaRecords.length} 项，不可合并或省略任何一题），每项给得分(0-100)、1-2条亮点、1-2条改进点；严格客观。
+【历史弱项闭环】必须额外输出：
+- weakness_tags：本次报告中可长期追踪的弱项标签，3-8个，短词即可，如"回答缺少数据""本人贡献不清""技术边界理解弱"。
+- improvement_goals：下次训练前应优先改善的目标，3-5条，必须可执行。
+- next_probe_suggestions：下次模拟面试应重点追问的问题方向，3-5条。
+- historical_progress：如果有历史上下文，判断这次相比历史是否进步、哪些弱项仍重复；没有历史则说明这是基线报告。
 【必须严格按以下JSON格式返回，不要任何其他文字，不要markdown代码块】
-{"scores":{"jobMatch":数字,"logic":数字,"fluency":数字,"depth":数字,"confidence":数字,"value":数字},"overallComment":"一句话评价(50字内)","suggestions":["建议1","建议2","建议3"],"questions":[{"score":数字,"good":["亮点"],"bad":["改进"]}],"bonus":["隐性加分信号"],"penalty":["隐性减分信号"]}`;
+{"scores":{"jobMatch":数字,"logic":数字,"fluency":数字,"depth":数字,"confidence":数字,"value":数字},"overallComment":"一句话评价(50字内)","suggestions":["建议1","建议2","建议3"],"questions":[{"score":数字,"good":["亮点"],"bad":["改进"]}],"bonus":["隐性加分信号"],"penalty":["隐性减分信号"],"weakness_tags":["弱项标签"],"improvement_goals":["目标1","目标2","目标3"],"next_probe_suggestions":["追问方向1","追问方向2","追问方向3"],"historical_progress":{"summary":"历史对比总结(80字内)","improved":["进步点"],"repeated_weaknesses":["仍重复的问题"]}}`;
 
       try {
         document.getElementById('loadingTip').textContent = 'AI 正在逐题分析，请稍候...';
@@ -554,6 +645,75 @@ ${qaText}
       }catch(e){ /* localStorage 不可用时忽略 */ }
     }
 
+    function knowledgeLocalKey(userId){
+      return `aimianjing:${userId || 'anon'}:knowledgeItems`;
+    }
+    function normalizeTags(value){
+      if(Array.isArray(value)) return value.map(String).map(s=>s.trim()).filter(Boolean).slice(0,12);
+      return String(value||'').split(/[,，、\s]+/).map(s=>s.trim()).filter(Boolean).slice(0,12);
+    }
+    function upsertLocalKnowledge(userId, item){
+      try{
+        const key = knowledgeLocalKey(userId);
+        const arr = JSON.parse(localStorage.getItem(key) || '[]');
+        const uniq = item.source_ref ? `${item.source}:${item.source_ref}` : item.id;
+        const idx = arr.findIndex(x => (x.source_ref ? `${x.source}:${x.source_ref}` : x.id) === uniq);
+        const next = { id:item.id || `local_${Date.now()}_${Math.random().toString(16).slice(2)}`, ...item, updated_at:new Date().toISOString() };
+        if(idx >= 0) arr[idx] = { ...arr[idx], ...next };
+        else arr.unshift({ ...next, created_at:new Date().toISOString() });
+        localStorage.setItem(key, JSON.stringify(arr.slice(0,200)));
+      }catch(e){ console.warn('本地知识库写入失败', e); }
+    }
+    function makeReportKnowledgeItem(result, row, savedRecord){
+      const sourceRef = String(savedRecord?.id || savedRecord?.created_at || row?.created_at || `report_${Date.now()}`);
+      const qaText = (qaRecords||[]).map((r,i)=>`Q${i+1}: ${r.question || ''}\nA${i+1}: ${r.answer || ''}`).join('\n\n');
+      const content = [
+        `综合评价：${result.overallComment || ''}`,
+        `改进建议：${(result.suggestions || []).join('；')}`,
+        `本次弱项标签：${(result.weakness_tags || []).join('；')}`,
+        `持续改进目标：${(result.improvement_goals || []).join('；')}`,
+        `下次追问建议：${(result.next_probe_suggestions || []).join('；')}`,
+        qaText,
+      ].filter(Boolean).join('\n\n');
+      return {
+        source:'report',
+        source_ref:sourceRef,
+        title:`${jobName} · ${levelName} · ${row.type_list || '综合面试'} · 得分${row.total_score}`,
+        summary:result.overallComment || `模拟面试报告，综合得分 ${row.total_score}`,
+        content,
+        company:'',
+        role:jobName,
+        round:row.type_list || '',
+        tags:normalizeTags([jobName, levelName, row.type_list, '模拟面试', '报告', ...(result.weakness_tags || [])]),
+        metadata:{
+          score:row.total_score,
+          scores:result.scores || {},
+          qa_count:(qaRecords||[]).length,
+          weakness_tags:result.weakness_tags || [],
+          improvement_goals:result.improvement_goals || [],
+          next_probe_suggestions:result.next_probe_suggestions || [],
+          historical_progress:result.historical_progress || {},
+        },
+      };
+    }
+    async function saveReportKnowledge(result, row, savedRecord, user){
+      if(!user) return;
+      const item = { user_id:user.id, ...makeReportKnowledgeItem(result, row, savedRecord) };
+      upsertLocalKnowledge(user.id, item);
+      try{
+        if(window.AIProxy && item.content){
+          try{
+            const vecs = await AIProxy.embed([item.title, item.summary, item.content].filter(Boolean).join('\n').slice(0,2000));
+            if(vecs && vecs[0]) item.embedding = vecs[0];
+          }catch(embedErr){ console.warn('报告知识向量生成失败，不影响保存：', embedErr); }
+        }
+        const { error } = await sb.from('knowledge_items').upsert(item, { onConflict:'user_id,source,source_ref' });
+        if(error) throw error;
+      }catch(e){
+        console.warn('报告知识库云端同步失败，已保存本地：', e);
+      }
+    }
+
     let cloudSaved = false; // 防止失败重试时重复写入本地兜底
     async function saveToCloud(result){
       if(isViewMode) return;
@@ -569,6 +729,12 @@ ${qaText}
       if(!user){
         // 未登录：仅保存在本浏览器
         saveLocalHistory(localRecord);
+        // 未登录也同步到本地私有知识库，保证历史弱项闭环在本浏览器内立即可用
+        upsertLocalKnowledge('anon', makeReportKnowledgeItem(
+          result,
+          { type_list:localRecord.typeList, total_score:localRecord.totalScore, created_at:localRecord.date },
+          { created_at:localRecord.date }
+        ));
         localStorage.removeItem('videoUrl'); localStorage.removeItem('videoPath');
         showSaveToast('info','本次记录已存在此浏览器，登录后可云端永久保存并跨设备查看。');
         return;
@@ -578,14 +744,17 @@ ${qaText}
       showSaveToast('saving','正在保存到历史记录…');
       const row = { user_id:user.id, job_name:jobName, level_name:levelName, type_list:localRecord.typeList, total_score:parseFloat(total), scores:result.scores, qa_records:qaRecords, report:result, video_url:videoRef };
       try{
-        let { error } = await sb.from('interview_records').insert(row);
+        let savedRecord = null;
+        let { data, error } = await sb.from('interview_records').insert(row).select('id,created_at').single();
         if(error && /video_url/i.test(error.message||'')){
           // 兼容旧表结构：缺 video_url 列时去掉该字段重试，至少保住报告与评分（请执行 setup.sql 补列）
           console.warn('interview_records 缺少 video_url 列，降级保存。请在 Supabase 执行 setup.sql 补列。', error);
           delete row.video_url;
-          ({ error } = await sb.from('interview_records').insert(row));
+          ({ data, error } = await sb.from('interview_records').insert(row).select('id,created_at').single());
         }
         if(error) throw error;
+        savedRecord = data;
+        await saveReportKnowledge(result, row, savedRecord, user);
         cloudSaved = true;
         localStorage.removeItem('videoUrl'); localStorage.removeItem('videoPath');
         showSaveToast('ok','✅ 已保存到历史记录'+(videoRef?'（录像仅存本机）':''));
@@ -597,6 +766,7 @@ ${qaText}
     }
 
     function renderReport(result){
+      result = normalizeReportLearningFields(result || {});
       const scores = result.scores;
       let total=0; DIMENSIONS.forEach(d=> total+=(scores[d.key]||0)*d.weight/100); total=total.toFixed(1);
       let level='待加强';
@@ -629,6 +799,7 @@ ${qaText}
       const sg=document.getElementById('suggestions'); sg.innerHTML='';
       (result.suggestions||[]).forEach((s,i)=>{ const el=document.createElement('div'); el.className='flex gap-3 bg-white rounded-xl p-4';
         el.innerHTML=`<div class="w-6 h-6 rounded-full gradient-btn text-white text-xs flex items-center justify-center flex-shrink-0">${i+1}</div><div class="flex-1 text-sm text-gray-700">${escapeHtml(s)}</div><button class="text-xs text-indigo hover:underline whitespace-nowrap" onclick="location.href='配置页.html'">专项练习 →</button>`; sg.appendChild(el); });
+      renderGrowthMemory(result);
 
       const qList=document.getElementById('questionList'); qList.innerHTML='';
       normalizeQuestionRows(result.questions).forEach((item,idx)=>{ const rec=qaRecords[idx]||{};
@@ -655,6 +826,33 @@ ${qaText}
       document.getElementById('loadingView').classList.add('hidden');
       document.getElementById('reportView').classList.remove('hidden');
       if(!isViewMode) maybeOfferNextRound(); // 仅对刚完成的本场面试提示进入下一轮
+    }
+
+    function renderGrowthMemory(result){
+      const tags = result.weakness_tags || [];
+      const goals = result.improvement_goals || [];
+      const probes = result.next_probe_suggestions || [];
+      const hp = result.historical_progress || {};
+      const has = tags.length || goals.length || probes.length || hp.summary || (hp.improved||[]).length || (hp.repeated_weaknesses||[]).length;
+      const section=document.getElementById('growthMemorySection');
+      if(!has){ section.classList.add('hidden'); return; }
+      const tagBox=document.getElementById('weaknessTags');
+      tagBox.innerHTML = tags.length
+        ? tags.map(t=>`<span class="text-[11px] bg-white text-indigo border border-indigo/15 px-2 py-0.5 rounded-full">${escapeHtml(t)}</span>`).join('')
+        : '<span class="text-sm text-gray-300">暂无明显弱项标签</span>';
+      const list = (id, arr, colorClass) => {
+        const ul=document.getElementById(id);
+        ul.innerHTML = arr.length
+          ? arr.map(x=>`<li class="text-sm text-gray-600 flex gap-1.5"><span class="${colorClass}">·</span><span>${escapeHtml(x)}</span></li>`).join('')
+          : '<li class="text-sm text-gray-300">暂无</li>';
+      };
+      list('improvementGoals', goals, 'text-amber-600');
+      list('nextProbeSuggestions', probes, 'text-brandgreen');
+      const progress = document.getElementById('historicalProgress');
+      const improved = (hp.improved||[]).length ? `进步：${hp.improved.join('；')}` : '';
+      const repeated = (hp.repeated_weaknesses||[]).length ? `仍需关注：${hp.repeated_weaknesses.join('；')}` : '';
+      progress.textContent = [hp.summary, improved, repeated].filter(Boolean).join('。') || '这是第一份可追踪的基线报告，后续会持续对比。';
+      section.classList.remove('hidden');
     }
 
     /* ===== 好答案 vs 差答案 示范（来自面试 skill 模板，按需生成）===== */

@@ -24,7 +24,7 @@ window.AIProxy = (function () {
 
   // 各服务的前端超时（毫秒）。略高于服务端上游 90s，确保通常能拿到真实结果/错误；
   // 一旦网络挂起也能在有限时间内失败，避免界面无限停在"思考中"。
-  const TIMEOUTS = { chat: 100000, vision: 100000, asr: 60000, tts: 45000, quota: 15000 };
+  const TIMEOUTS = { chat: 100000, vision: 100000, asr: 60000, tts: 45000, quota: 15000, embed: 30000 };
 
   async function call(service, payload) {
     const controller = new AbortController();
@@ -76,5 +76,7 @@ window.AIProxy = (function () {
     ttsStreamUrl: (voice) => FUNCTIONS_URL.replace(/^http/i, "ws") + "?stream=tts&token=" + encodeURIComponent(getAccessToken()) + (voice ? "&voice=" + encodeURIComponent(voice) : ""),
     /** 查询今日额度 {used, limit} */
     quota: () => call("quota", {}),
+    /** 文本向量化（私有知识库语义检索 RAG）。传单条字符串或字符串数组；返回 number[][]（与输入顺序一致） */
+    embed: (texts) => call("embed", Array.isArray(texts) ? { texts } : { text: texts }).then((d) => d.embeddings),
   };
 })();

@@ -13,6 +13,10 @@ const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 const CHAT_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
 const NATIVE_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation";
+const EMBED_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings";
+// 文本向量化：用于私有知识库的语义检索（RAG）。维度需与 knowledge_items.embedding 列一致。
+const EMBED_MODEL = "text-embedding-v3";
+const EMBED_DIM = 1024;
 
 // 模型在服务端写死，客户端无法指定任意模型
 const CHAT_MODEL_FAST = "qwen-plus";       // 实时追问：优先速度与稳定性
@@ -30,7 +34,7 @@ const TTS_STREAM_DEFAULT_VOICE = "longxiaochun_v2";
 const TTS_STREAM_SAMPLE_RATE = 24000;
 
 // 额度：按"单位"计，约一场标准面试 = 8题 × (出题1 + 语音1 + 转写1) + 报告2 ≈ 26 单位
-const COSTS: Record<string, number> = { chat: 1, vision: 2, tts: 1, asr: 1, asr_stream: 1, tts_stream: 1 };
+const COSTS: Record<string, number> = { chat: 1, vision: 2, tts: 1, asr: 1, asr_stream: 1, tts_stream: 1, embed: 1 };
 const DAILY_LIMIT_ANON = 35;   // 匿名（按IP）：约 1 场/天
 const DAILY_LIMIT_USER = 105;  // 登录用户：约 3 场/天
 
@@ -206,6 +210,27 @@ Deno.serve(async (req) => {
       const content = data.output?.choices?.[0]?.message?.content;
       const text = Array.isArray(content) ? (content.find((c: any) => c.text)?.text ?? "") : "";
       return json({ text }, 200, headers);
+    }
+
+    if (service === "embed") {
+      // 支持单条 text 或批量 texts；统一返回 embeddings: number[][]
+      let texts: unknown = payload?.texts;
+      if (typeof payload?.text === "string") texts = [payload.text];
+      if (!Array.isArray(texts) || !texts.length) return json({ error: "texts 不能为空" }, 400, headers);
+      const inputs = (texts as unknown[]).slice(0, 16).map((t) => String(t ?? "").slice(0, 2000)).filter((s) => s.trim());
+      if (!inputs.length) return json({ error: "texts 不能为空" }, 400, headers);
+      const data = await callDashScope(EMBED_URL, {
+        model: EMBED_MODEL,
+        input: inputs,
+        dimensions: EMBED_DIM,
+        encoding_format: "float",
+      });
+      const embeddings = (data.data ?? [])
+        .slice()
+        .sort((a: any, b: any) => (a.index ?? 0) - (b.index ?? 0))
+        .map((d: any) => d.embedding);
+      if (!embeddings.length) throw new Error("向量服务未返回结果");
+      return json({ embeddings, dim: EMBED_DIM }, 200, headers);
     }
 
     return json({ error: "未知服务类型" }, 400, headers);

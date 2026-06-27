@@ -56,6 +56,7 @@
         <div class="bg-white rounded-2xl shadow-soft p-2">
           <a href="个人中心.html" class="flex items-center gap-3 px-4 py-3 rounded-xl bg-indigo/5 text-indigo text-sm font-medium">👤 账户信息</a>
           <a href="历史成长.html" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 text-sm text-gray-600">📈 历史成长</a>
+          <a href="知识库.html" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 text-sm text-gray-600">🧠 我的知识库</a>
           <a href="会员.html" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 text-sm text-gray-600">💳 我的会员</a>
           <a href="简历管理.html" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 text-sm text-gray-600">📄 简历管理</a>
           <a href="设置.html" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 text-sm text-gray-600">⚙️ 设置</a>
@@ -82,7 +83,7 @@
           </div>
         </div>
 
-        <div class="bg-white rounded-2xl shadow-soft p-6">
+        <div class="bg-white rounded-2xl shadow-soft p-6 mb-6">
           <h2 class="text-lg font-bold mb-4">账户信息</h2>
           <div class="space-y-4">
             <div class="flex items-center justify-between py-2 border-b border-gray-50">
@@ -109,6 +110,16 @@
             </div>
           </div>
         </div>
+
+        <div class="bg-white rounded-2xl shadow-soft p-6">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-lg font-bold">我的面试知识库</h2>
+              <p class="text-sm text-gray-400 mt-1">已移到独立模块；从侧边栏进入，可管理真实面经和模拟面试历史知识。</p>
+            </div>
+            <button onclick="location.href='知识库.html'" class="gradient-btn text-white text-sm font-medium px-5 py-2.5 rounded-xl">进入知识库</button>
+          </div>
+        </div>
       </main>
     </div>
   </div>
@@ -132,6 +143,9 @@
     const SUPABASE_URL = window.SUPABASE_URL;
     const SUPABASE_KEY = window.SUPABASE_KEY;
     const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    let currentUser = null;
+    let knowledgeItems = [];
+    let knowledgeFilter = 'all';
     /* ================================== */
 
     async function init(){
@@ -141,6 +155,7 @@
         location.href = '登录页.html';
         return;
       }
+      currentUser = user;
 
       // 邮箱
       document.getElementById('sideEmail').textContent = user.email;
@@ -164,6 +179,266 @@
       }
 
       loadStats();
+    }
+
+    function escapeHtml(value){
+      return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function localKey(name){
+      const uid = currentUser?.id || 'anon';
+      return `aimianjing:${uid}:${name}`;
+    }
+
+    function readLocalArray(name){
+      try{ return JSON.parse(localStorage.getItem(localKey(name)) || '[]'); }
+      catch(e){ return []; }
+    }
+    function writeLocalArray(name, arr){
+      localStorage.setItem(localKey(name), JSON.stringify(arr));
+    }
+
+    function normalizeTags(value){
+      if(Array.isArray(value)) return value.map(String).map(s=>s.trim()).filter(Boolean).slice(0,12);
+      return String(value||'').split(/[,，、\s]+/).map(s=>s.trim()).filter(Boolean).slice(0,12);
+    }
+
+    function profileFromForm(){
+      return {
+        target_role: document.getElementById('profileTargetRole').value.trim(),
+        target_companies: document.getElementById('profileTargetCompanies').value.trim(),
+        background: document.getElementById('profileBackground').value.trim(),
+        keywords: document.getElementById('profileKeywords').value.trim(),
+        weekly_collect_enabled: document.getElementById('profileWeekly').checked,
+      };
+    }
+
+    function fillProfileForm(profile={}){
+      document.getElementById('profileTargetRole').value = profile.target_role || localStorage.getItem('targetJob') || '';
+      document.getElementById('profileTargetCompanies').value = profile.target_companies || '';
+      document.getElementById('profileBackground').value = profile.background || '';
+      document.getElementById('profileKeywords').value = profile.keywords || '';
+      document.getElementById('profileWeekly').checked = !!profile.weekly_collect_enabled;
+      document.getElementById('infoJob').textContent = profile.target_role || localStorage.getItem('targetJob') || '未设置';
+    }
+
+    async function loadProfile(){
+      const state = document.getElementById('profileSaveState');
+      state.textContent = '加载中…';
+      const localProfile = JSON.parse(localStorage.getItem(localKey('ragProfile')) || 'null');
+      try{
+        const { data, error } = await sb.from('user_profiles').select('*').eq('user_id', currentUser.id).maybeSingle();
+        if(error) throw error;
+        fillProfileForm(data || localProfile || {});
+        state.textContent = data ? '已从云端加载' : '本地草稿';
+      }catch(e){
+        console.warn('个人背景云端加载失败，使用本地数据：', e);
+        fillProfileForm(localProfile || {});
+        state.textContent = '本地预览模式';
+      }
+    }
+
+    async function saveProfile(){
+      const state = document.getElementById('profileSaveState');
+      const profile = profileFromForm();
+      localStorage.setItem(localKey('ragProfile'), JSON.stringify(profile));
+      if(profile.target_role){
+        localStorage.setItem('targetJob', profile.target_role);
+        document.getElementById('infoJob').textContent = profile.target_role;
+      }
+      state.textContent = '保存中…';
+      try{
+        const row = { user_id: currentUser.id, ...profile, updated_at: new Date().toISOString() };
+        const { error } = await sb.from('user_profiles').upsert(row, { onConflict:'user_id' });
+        if(error) throw error;
+        state.textContent = '已保存到私有云端';
+      }catch(e){
+        console.warn('个人背景云端保存失败，已保存本地：', e);
+        state.textContent = '已保存到本地（待建表后可云端保存）';
+      }
+    }
+
+    function buildSearchPreview(){
+      const p = profileFromForm();
+      const parts = [
+        p.target_role,
+        p.target_companies,
+        p.keywords,
+        '面试经验',
+        '面经',
+        '面试题',
+        '复盘',
+      ].filter(Boolean);
+      const queries = [
+        parts.join(' '),
+        [p.target_companies, p.target_role, '面试流程 经验'].filter(Boolean).join(' '),
+        [p.target_role, p.keywords, '高频问题 回答思路'].filter(Boolean).join(' '),
+      ].filter(Boolean);
+      const box = document.getElementById('searchPreview');
+      box.innerHTML = `<div class="font-semibold text-gray-700 mb-2">后续每周自动收集可用这些关键词：</div>${queries.map(q=>`<div class="bg-white border border-gray-100 rounded-lg px-3 py-2 mb-2">${escapeHtml(q)}</div>`).join('')}<div class="text-xs text-gray-400 mt-2">当前仅生成预览；自动搜索会在第二期接搜索 API + 定时任务。</div>`;
+      box.classList.remove('hidden');
+    }
+
+    function typeLabel(type){
+      return type === 'manual' ? '我的真实面经' : type === 'report' ? '模拟面试历史' : '外部面经情报';
+    }
+
+    function localKnowledgeUpsert(item){
+      const arr = readLocalArray('knowledgeItems');
+      const key = item.source_ref ? `${item.source}:${item.source_ref}` : item.id;
+      const idx = arr.findIndex(x => (x.source_ref ? `${x.source}:${x.source_ref}` : x.id) === key);
+      if(idx >= 0) arr[idx] = { ...arr[idx], ...item, updated_at:new Date().toISOString() };
+      else arr.unshift({ id:item.id || `local_${Date.now()}_${Math.random().toString(16).slice(2)}`, ...item, created_at:new Date().toISOString() });
+      writeLocalArray('knowledgeItems', arr.slice(0,200));
+      return arr;
+    }
+
+    async function saveKnowledgeItem(item){
+      const localItem = { ...item, tags: normalizeTags(item.tags), user_id: currentUser.id };
+      localKnowledgeUpsert(localItem);
+      try{
+        const { data, error } = await sb.from('knowledge_items').upsert(localItem, { onConflict:'user_id,source,source_ref' }).select('*').single();
+        if(error) throw error;
+        return data;
+      }catch(e){
+        console.warn('知识条目云端保存失败，已保存本地：', e);
+        return localItem;
+      }
+    }
+
+    async function loadKnowledge(){
+      const localItems = readLocalArray('knowledgeItems');
+      try{
+        const { data, error } = await sb.from('knowledge_items').select('*').eq('user_id', currentUser.id).order('created_at', { ascending:false }).limit(200);
+        if(error) throw error;
+        knowledgeItems = (data && data.length) ? data : localItems;
+      }catch(e){
+        console.warn('知识库云端加载失败，使用本地数据：', e);
+        knowledgeItems = localItems;
+      }
+      renderKnowledge();
+    }
+
+    function setKnowledgeFilter(type){
+      knowledgeFilter = type;
+      document.querySelectorAll('.kb-filter').forEach(btn=>{
+        const active = btn.dataset.kbFilter === type;
+        btn.className = 'kb-filter rounded-xl px-4 py-3 text-left transition ' + (active ? 'bg-indigo text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100');
+      });
+      renderKnowledge();
+    }
+
+    function renderKnowledge(){
+      const all = knowledgeItems || [];
+      const visible = knowledgeFilter === 'all' ? all : all.filter(x => x.source === knowledgeFilter);
+      document.getElementById('kbCountAll').textContent = all.length;
+      document.getElementById('kbCountManual').textContent = all.filter(x=>x.source==='manual').length;
+      document.getElementById('kbCountReport').textContent = all.filter(x=>x.source==='report').length;
+      const list = document.getElementById('knowledgeList');
+      const empty = document.getElementById('knowledgeEmpty');
+      list.innerHTML = '';
+      empty.classList.toggle('hidden', visible.length > 0);
+      visible.forEach(item=>{
+        const tags = normalizeTags(item.tags);
+        const div = document.createElement('div');
+        div.className = 'border border-gray-100 rounded-2xl p-4 hover:border-indigo/30 hover:shadow-soft transition';
+        div.innerHTML = `
+          <div class="flex items-start justify-between gap-3 mb-2">
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-[11px] px-2 py-0.5 rounded-full ${item.source==='manual'?'bg-emerald-50 text-brandgreen':item.source==='report'?'bg-indigo/10 text-indigo':'bg-amber-50 text-brandorange'}">${typeLabel(item.source)}</span>
+                <span class="text-xs text-gray-300">${escapeHtml((item.created_at||'').slice(0,10))}</span>
+              </div>
+              <h3 class="font-semibold text-sm text-gray-800">${escapeHtml(item.title || '未命名知识')}</h3>
+            </div>
+          </div>
+          <p class="text-sm text-gray-500 leading-relaxed whitespace-pre-wrap">${escapeHtml(item.summary || item.content || '').slice(0,260)}</p>
+          ${tags.length ? `<div class="flex flex-wrap gap-1.5 mt-3">${tags.map(t=>`<span class="text-[11px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+        `;
+        list.appendChild(div);
+      });
+    }
+
+    async function addManualExperience(){
+      const state = document.getElementById('kbSaveState');
+      const company = document.getElementById('expCompany').value.trim();
+      const role = document.getElementById('expRole').value.trim();
+      const round = document.getElementById('expRound').value.trim();
+      const tags = normalizeTags(document.getElementById('expTags').value);
+      const content = document.getElementById('expContent').value.trim();
+      if(!content){ state.textContent = '请先填写面试经验内容'; return; }
+      state.textContent = '保存中…';
+      const title = [company, role, round].filter(Boolean).join(' · ') || '我的面试经验';
+      const item = {
+        source:'manual',
+        source_ref:`manual_${Date.now()}`,
+        title,
+        summary: content.slice(0,180),
+        content,
+        company,
+        role,
+        round,
+        tags,
+        metadata:{ company, role, round },
+      };
+      const saved = await saveKnowledgeItem(item);
+      knowledgeItems = [saved, ...knowledgeItems.filter(x => !(x.source === saved.source && x.source_ref === saved.source_ref))];
+      renderKnowledge();
+      ['expCompany','expRole','expRound','expTags','expContent'].forEach(id=>document.getElementById(id).value='');
+      state.textContent = '已保存到知识库';
+    }
+
+    function reportToKnowledgeItem(record){
+      const report = record.report || {};
+      const qa = record.qa_records || record.qaRecords || [];
+      const total = record.total_score ?? record.totalScore ?? '';
+      const job = record.job_name || record.jobName || '模拟面试';
+      const level = record.level_name || record.levelName || '';
+      const type = record.type_list || record.typeList || '综合面试';
+      const title = `${job}${level ? ' · '+level : ''} · ${type} · 得分${total}`;
+      const qaText = qa.map((r,i)=>`Q${i+1}: ${r.question || ''}\nA${i+1}: ${r.answer || ''}`).join('\n\n');
+      const content = [
+        `综合评价：${report.overallComment || ''}`,
+        `改进建议：${(report.suggestions || []).join('；')}`,
+        qaText,
+      ].filter(Boolean).join('\n\n');
+      return {
+        source:'report',
+        source_ref:String(record.id || record.created_at || record.date || `${job}_${Date.now()}`),
+        title,
+        summary: report.overallComment || `模拟面试报告，综合得分 ${total}`,
+        content,
+        company:'',
+        role:job,
+        round:type,
+        tags:normalizeTags([job, level, type, '模拟面试', '报告']),
+        metadata:{ score:total, scores:record.scores || report.scores || {}, qa_count:qa.length },
+      };
+    }
+
+    async function syncReportKnowledge(opts={}){
+      let count = 0;
+      try{
+        const { data, error } = await sb.from('interview_records').select('*').eq('user_id', currentUser.id).order('created_at', { ascending:false }).limit(100);
+        if(error) throw error;
+        for(const record of (data || [])){
+          const item = reportToKnowledgeItem(record);
+          const saved = await saveKnowledgeItem(item);
+          knowledgeItems = [saved, ...knowledgeItems.filter(x => !(x.source === saved.source && x.source_ref === saved.source_ref))];
+          count++;
+        }
+      }catch(e){
+        console.warn('云端历史报告同步失败，尝试同步本地历史：', e);
+        const localHistory = JSON.parse(localStorage.getItem('interviewHistory') || '[]');
+        for(const record of localHistory){
+          const item = reportToKnowledgeItem(record);
+          const saved = await saveKnowledgeItem(item);
+          knowledgeItems = [saved, ...knowledgeItems.filter(x => !(x.source === saved.source && x.source_ref === saved.source_ref))];
+          count++;
+        }
+      }
+      renderKnowledge();
+      if(!opts.silent) alert(count ? `已同步 ${count} 份历史报告到知识库` : '暂无可同步的历史报告');
     }
 
     function setNickname(name){

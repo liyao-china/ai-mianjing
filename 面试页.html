@@ -64,18 +64,18 @@
     @keyframes ivBreathe { 0%,100%{ transform:translateY(0) scale(1);} 50%{ transform:translateY(1.4px) scale(1.014);} }
     @keyframes ivNod { 0%,100%{ transform:translateY(0) rotate(0);} 42%{ transform:translateY(2.2px) rotate(.7deg);} 72%{ transform:translateY(.6px) rotate(-.5deg);} }
     @media (prefers-reduced-motion: reduce){ #ivBody, #ivAvatar.iv-speaking #ivHeadTop { animation:none; } }
-    /* 照片头像：呼吸在外层；嘴部叠层负责明显开合，避免整张照片轻微缩放导致“嘴没动”的错觉 */
-    #ivPhotoWrap { transform-origin:50% 60%; animation: ivPhotoBreathe 4.6s ease-in-out infinite; will-change:transform; }
+    /* 真人照片版：不做假口型，避免静态照片嘴部错位；用呼吸、光环和状态变化表达“正在说话” */
+    #ivPhotoWrap { display:block; transform-origin:50% 60%; animation: ivPhotoBreathe 4.6s ease-in-out infinite; will-change:transform; }
     #ivPhoto { transform-origin:50% 18%; transition:filter .5s ease; }
     #ivMouthOverlay {
-      position:absolute; left:50%; top:51.5%; width:12.5%; height:4.2%;
+      position:absolute; left:50%; top:57.5%; width:10.5%; height:2.6%;
       transform:translate(-50%,-50%) scaleY(.08); transform-origin:50% 50%;
-      border-radius:999px; background:rgba(80,24,28,.62);
-      box-shadow:0 0 0 1px rgba(255,255,255,.16) inset, 0 2px 6px rgba(0,0,0,.12);
-      opacity:0; mix-blend-mode:multiply; transition:opacity .12s ease, transform .05s linear;
+      border-radius:999px; background:rgba(88,28,34,.5);
+      box-shadow:0 -1px 0 rgba(255,255,255,.18) inset;
+      opacity:0; transition:opacity .12s ease, transform .05s linear;
       pointer-events:none;
     }
-    #ivStageBox.iv-photo-speaking #ivMouthOverlay { opacity:.55; }
+    #ivStageBox.iv-photo-speaking #ivMouthOverlay { opacity:0; }
     #ivStageBox.iv-photo-thinking #ivPhoto { filter:brightness(.94) saturate(.92); }
     @keyframes ivPhotoBreathe { 0%,100%{ transform:translateY(0) scale(1.0);} 50%{ transform:translateY(-1px) scale(1.012);} }
     @media (prefers-reduced-motion: reduce){ #ivPhotoWrap { animation:none; } }
@@ -126,45 +126,66 @@
         <svg id="ivAvatar" viewBox="0 0 240 240" class="w-full h-full" aria-label="AI 面试官" style="display:none">
           <defs>
             <clipPath id="ivClip"><circle cx="120" cy="120" r="120"/></clipPath>
-            <linearGradient id="ivBg" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stop-color="#EEF2FF"/><stop offset="1" stop-color="#DCE3FB"/>
+            <radialGradient id="ivBg" cx="50%" cy="36%" r="72%">
+              <stop offset="0" stop-color="#FFFFFF"/>
+              <stop offset=".58" stop-color="#EEF2FF"/>
+              <stop offset="1" stop-color="#D8E1FF"/>
             </linearGradient>
             <linearGradient id="ivSuit" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stop-color="#41415E"/><stop offset="1" stop-color="#2A2A3E"/>
+              <stop offset="0" stop-color="#323B5F"/>
+              <stop offset="1" stop-color="#171A2E"/>
             </linearGradient>
-            <radialGradient id="ivSkin" cx="50%" cy="40%" r="62%">
-              <stop offset="0" stop-color="#FFE6D2"/><stop offset="1" stop-color="#F3C6A8"/>
+            <radialGradient id="ivSkin" cx="48%" cy="34%" r="66%">
+              <stop offset="0" stop-color="#FFECDC"/>
+              <stop offset=".62" stop-color="#F7CFB5"/>
+              <stop offset="1" stop-color="#E7A987"/>
             </radialGradient>
+            <linearGradient id="ivHair" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#201713"/>
+              <stop offset=".55" stop-color="#3B241D"/>
+              <stop offset="1" stop-color="#17100E"/>
+            </linearGradient>
+            <filter id="ivSoftShadow" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#1E293B" flood-opacity=".14"/>
+            </filter>
           </defs>
           <g clip-path="url(#ivClip)">
             <rect width="240" height="240" fill="url(#ivBg)"/>
-            <circle id="ivGlow" cx="120" cy="98" r="78" fill="#A5B4FC" opacity="0"/>
-            <g id="ivBody">
-              <path d="M36 240 C40 186 78 166 120 166 C162 166 200 186 204 240 Z" fill="url(#ivSuit)"/>
-              <path d="M103 170 L120 198 L137 170 L132 240 L108 240 Z" fill="#F5F6FA"/>
-              <path d="M120 198 L120 240" stroke="#DADCE6" stroke-width="2.5"/>
-              <rect x="106" y="136" width="28" height="34" rx="12" fill="#F0BE9E"/>
+            <circle id="ivGlow" cx="120" cy="98" r="84" fill="#818CF8" opacity="0"/>
+            <g id="ivBody" filter="url(#ivSoftShadow)">
+              <path d="M34 240 C38 190 74 166 120 166 C166 166 202 190 206 240 Z" fill="url(#ivSuit)"/>
+              <path d="M81 190 C93 176 104 169 120 169 C136 169 147 176 159 190 L147 240 H93 Z" fill="#EEF2FF"/>
+              <path d="M101 171 L120 205 L139 171 L132 240 H108 Z" fill="#FFFFFF"/>
+              <path d="M120 205 L120 240" stroke="#CBD5E1" stroke-width="2"/>
+              <path d="M73 204 C84 188 95 177 108 170 L92 240 H50 C55 224 62 211 73 204 Z" fill="#222A48" opacity=".94"/>
+              <path d="M167 204 C156 188 145 177 132 170 L148 240 H190 C185 224 178 211 167 204 Z" fill="#222A48" opacity=".94"/>
+              <rect x="104" y="139" width="32" height="36" rx="13" fill="#EFB99B"/>
               <g id="ivHeadTop">
-                <path d="M62 100 C62 50 90 28 120 28 C150 28 178 50 178 100 C178 124 172 142 164 152 L162 108 C162 78 142 62 120 62 C98 62 78 78 78 108 L76 152 C68 142 62 124 62 100 Z" fill="#39291F"/>
-                <ellipse cx="120" cy="100" rx="46" ry="53" fill="url(#ivSkin)"/>
-                <ellipse cx="73" cy="106" rx="8" ry="12" fill="#F0BE9E"/>
-                <ellipse cx="167" cy="106" rx="8" ry="12" fill="#F0BE9E"/>
-                <path d="M73 96 C73 58 95 40 120 40 C145 40 167 58 167 96 C150 76 138 72 120 72 C102 72 90 76 73 96 Z" fill="#39291F"/>
-                <path id="ivBrowL" d="M87 92 Q100 85 113 91" stroke="#4A332A" stroke-width="3.4" fill="none" stroke-linecap="round"/>
-                <path id="ivBrowR" d="M127 91 Q140 85 153 92" stroke="#4A332A" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+                <path d="M66 96 C67 58 89 34 120 34 C151 34 173 58 174 96 C169 82 159 72 145 66 C129 59 109 59 94 66 C80 72 71 83 66 96 Z" fill="url(#ivHair)"/>
+                <path d="M74 112 C74 78 94 55 120 55 C146 55 166 78 166 112 C166 142 147 161 120 161 C93 161 74 142 74 112 Z" fill="url(#ivSkin)"/>
+                <ellipse cx="72" cy="113" rx="8" ry="12" fill="#F0B897"/>
+                <ellipse cx="168" cy="113" rx="8" ry="12" fill="#F0B897"/>
+                <path d="M72 88 C80 59 101 44 126 44 C149 44 164 60 168 89 C153 74 131 69 105 73 C92 75 80 81 72 88 Z" fill="url(#ivHair)"/>
+                <path d="M94 93 Q105 88 116 92" stroke="#3B2A24" stroke-width="3" fill="none" stroke-linecap="round"/>
+                <path d="M126 92 Q138 88 149 93" stroke="#3B2A24" stroke-width="3" fill="none" stroke-linecap="round"/>
                 <g id="ivEyes">
-                  <ellipse cx="100" cy="105" rx="9.2" ry="6.6" fill="#fff"/>
-                  <ellipse cx="140" cy="105" rx="9.2" ry="6.6" fill="#fff"/>
-                  <circle id="ivPupilL" cx="100" cy="105" r="4.4" fill="#39291F"/>
-                  <circle id="ivPupilR" cx="140" cy="105" r="4.4" fill="#39291F"/>
+                  <path d="M90 106 Q100 99 111 106 Q100 112 90 106 Z" fill="#FFFFFF"/>
+                  <path d="M129 106 Q140 99 151 106 Q140 112 129 106 Z" fill="#FFFFFF"/>
+                  <circle id="ivPupilL" cx="100" cy="106" r="4.1" fill="#211915"/>
+                  <circle id="ivPupilR" cx="140" cy="106" r="4.1" fill="#211915"/>
+                  <circle cx="101.5" cy="104.5" r="1.1" fill="#FFFFFF" opacity=".9"/>
+                  <circle cx="141.5" cy="104.5" r="1.1" fill="#FFFFFF" opacity=".9"/>
                 </g>
-                <rect id="ivLidL" x="90" y="98" width="20" height="15" rx="6" fill="#F3C6A8" style="transform-box:fill-box;transform-origin:50% 0;transform:scaleY(0)"/>
-                <rect id="ivLidR" x="130" y="98" width="20" height="15" rx="6" fill="#F3C6A8" style="transform-box:fill-box;transform-origin:50% 0;transform:scaleY(0)"/>
-                <path d="M120 110 L115 125 Q120 129 125 125" stroke="#DC9E78" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+                <rect id="ivLidL" x="88" y="99" width="25" height="16" rx="8" fill="#F3C6A8" style="transform-box:fill-box;transform-origin:50% 0;transform:scaleY(0)"/>
+                <rect id="ivLidR" x="127" y="99" width="25" height="16" rx="8" fill="#F3C6A8" style="transform-box:fill-box;transform-origin:50% 0;transform:scaleY(0)"/>
+                <path d="M120 112 C117 120 114 126 115 128 C117 131 123 131 126 128" stroke="#D28A67" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+                <path d="M104 137 C113 140 127 140 136 137" stroke="#B66E64" stroke-width="2" fill="none" stroke-linecap="round" opacity=".48"/>
                 <g id="ivMouthG" style="transform-box:fill-box;transform-origin:50% 50%;transform:scaleY(0.16)">
-                  <ellipse id="ivMouth" cx="120" cy="140" rx="15" ry="9" fill="#A24A42"/>
-                  <ellipse cx="120" cy="137" rx="9" ry="2.6" fill="#F2A39A" opacity=".7"/>
+                  <path id="ivMouth" d="M104 141 C112 136 128 136 136 141 C130 150 110 150 104 141 Z" fill="#7A3735"/>
+                  <path d="M111 140 C117 142 123 142 129 140" stroke="#EFA3A0" stroke-width="1.8" fill="none" stroke-linecap="round" opacity=".62"/>
                 </g>
+                <path d="M88 127 C92 131 97 132 101 130" stroke="#E2A383" stroke-width="1.2" fill="none" opacity=".22"/>
+                <path d="M152 127 C148 131 143 132 139 130" stroke="#E2A383" stroke-width="1.2" fill="none" opacity=".22"/>
               </g>
             </g>
           </g>
@@ -297,6 +318,60 @@
     let cfg={}; try { cfg = JSON.parse(localStorage.getItem('interviewConfig')) || {}; } catch(e){}
     let resumeInfo=''; try { resumeInfo = localStorage.getItem('resumeInfo') || ''; } catch(e){}
     let jdInfo=''; try { jdInfo = localStorage.getItem('jdInfo') || ''; } catch(e){}
+
+    function readJSON(key, fallback){ try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); } catch(e){ return fallback; } }
+    // 同步从本地会话令牌解析当前登录用户 id（与 ai-client.js 取 token 的逻辑一致）
+    function currentUserIdSync(){
+      try {
+        for(const key of Object.keys(localStorage)){
+          if(key.startsWith('sb-') && key.endsWith('-auth-token')){
+            const s = JSON.parse(localStorage.getItem(key) || '{}');
+            const uid = s?.user?.id || s?.currentSession?.user?.id;
+            if(uid) return uid;
+          }
+        }
+      } catch(e){}
+      return null;
+    }
+    // 只读「当前登录用户（或匿名）」自己的本地知识，避免同一浏览器多账号串号泄露
+    function loadLocalKnowledge(){
+      const uid = currentUserIdSync();
+      const key = `aimianjing:${uid || 'anon'}:knowledgeItems`;
+      try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch(e){ return []; }
+    }
+    function collectKnowledgeContext(items, profile){
+      const onlineResume = readJSON('onlineResume', {});
+      const activeResumeId = localStorage.getItem('activeResumeId') || '';
+      const resumeVersions = readJSON('resumeVersions', []);
+      const activeResumeName = activeResumeId === 'online' ? '在线简历' : (resumeVersions.find(v=>v.id===activeResumeId)?.name || '');
+      const ragProfile = readJSON('ragProfile', {});
+      const p = profile || {}; // 云端 user_profiles 优先（支持跨设备）
+      const targetRole = p.target_role || onlineResume.job || ragProfile.target_role;
+      const targetCompanies = p.target_companies || onlineResume.companies || ragProfile.target_companies;
+      const keywords = p.keywords || onlineResume.skills || ragProfile.keywords;
+      const background = p.background || ragProfile.background;
+      // 向量检索结果已按相关性排序；本地兜底则按时间倒序
+      const fromVector = (Array.isArray(items) ? items : []).some(x => x && x.similarity != null);
+      const arr = (Array.isArray(items) ? items : []).filter(x => x && (x.source === 'manual' || x.source === 'report' || x.source === 'external'));
+      const relevant = (fromVector ? arr : arr.sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')))).slice(0,8);
+      const lines = [];
+      if(targetRole) lines.push(`目标岗位/方向：${targetRole}`);
+      if(targetCompanies) lines.push(`目标公司/行业：${targetCompanies}`);
+      if(onlineResume.years) lines.push(`工作年限：${onlineResume.years}`);
+      if(keywords) lines.push(`核心技能/关键词：${keywords}`);
+      if(background) lines.push(`背景摘要：${String(background).slice(0,200)}`);
+      if(activeResumeName) lines.push(`当前简历版本：${activeResumeName}`);
+      if(relevant.length){
+        lines.push('私有知识库摘要（仅作追问依据，不要直接复述给候选人）：');
+        relevant.forEach((item, i)=>{
+          const label = item.source === 'manual' ? '真实面经' : item.source === 'external' ? '外部情报' : '模拟报告';
+          lines.push(`${i+1}. [${label}] ${item.title || ''}：${(item.summary || item.content || '').slice(0,160)}`);
+        });
+      }
+      return lines.join('\n').slice(0,1600);
+    }
+    // 先用本地兜底，登录用户随后异步用云端知识刷新（见 refreshKnowledgeFromCloud）
+    let privateKnowledgeContext = collectKnowledgeContext(loadLocalKnowledge());
 
     /* ===== 面试轮次序列：按配置依次进行；每轮各自出报告，结束后由报告页询问是否进入下一轮 ===== */
     const cfgRounds = (Array.isArray(cfg.rounds) && cfg.rounds.length) ? cfg.rounds : (cfg.round ? [cfg.round] : ['mentor']);
@@ -442,12 +517,14 @@ AI PM ≠ 传统PM，核心差异是"AI能力边界判断"。按以下维度与�
         `\n要求：你是这位候选人完整面试流程中的第${series.index+1}轮（${roundName}），前面几轮已经通过。信息重心要在前一轮基础上"升级"（执行细节→成果产出→跨团队协作→长期价值与判断），优先把前几轮没问清的薄弱点验证到位，避免与前轮重复提问；如发现与前几轮回答矛盾，要顺势追问。\n`
       : '';
 
-    const systemPrompt = `${roundPersonas[roundKey]}
+    function buildSystemPrompt(kctx){
+    return `${roundPersonas[roundKey]}
 
 【面试背景】候选人应聘【${jobName}】岗位（${levelName}级别）。本场为${roundName}，类型侧重：${typeList}。
 【职级标尺】${levelExpectations[levelKey]}
 ${resumeInfo ? '【候选人简历/背景】\n' + resumeInfo + '\n' : ''}
 ${jdInfo ? '【目标岗位JD】\n' + jdInfo + '\n重点对照JD要求逐项考察。\n' : ''}
+${kctx ? '【候选人私有知识库上下文】\n' + kctx + '\n使用规则：这部分只用于判断候选人的目标方向、过往弱项、真实面经和模拟报告中的待提升点，从而设计更贴合的追问；不要向候选人明示“我看到了你的知识库/历史报告”，也不要逐字复述这些内容。\n' : ''}
 ${carryoverText}
 【面试官提问 Skill：interviewer-questioning】
 - 候选人简历/JD 只属于候选人，只能用于追问依据；绝不能当作面试官身份或经历。
@@ -502,8 +579,62 @@ ${roleGuide ? roleGuide + '\n' : ''}
 - 反问结束：用克制得体的一两句话收尾（如"好的，今天的面试就到这里，后续结果会有同事与你联系"）再输出 [STATUS:END]
 本次面试最多提问${TOTAL_QUESTIONS}道题。不要超过题目上限。
 第一道自我介绍由系统直接发出。收到候选人的自我介绍后，再开始你的递进提问。`;
+    }
 
-    state.messages.push({ role:'system', content: systemPrompt });
+    state.messages.push({ role:'system', content: buildSystemPrompt(privateKnowledgeContext) });
+
+    // 登录用户：异步从云端 knowledge_items 拉取知识，重建系统提示（覆盖本地兜底，支持跨设备）。
+    // 第一道题是系统固定自我介绍，真正的 AI 出题发生在候选人作答之后，这里有足够时间完成刷新。
+    async function refreshKnowledgeFromCloud(){
+      const uid = currentUserIdSync();
+      if(!uid) return; // 未登录：保持本地上下文
+
+      // 1) 云端统一背景（user_profiles）：跨设备也能拿到目标岗位/关键词/背景
+      let profile = null;
+      try {
+        const { data } = await sb.from('user_profiles').select('target_role,target_companies,keywords,background').eq('user_id', uid).maybeSingle();
+        if(data) profile = data;
+      } catch(e){ /* 表不存在/无记录 → 用本地 ragProfile */ }
+
+      // 2) 语义检索（真正的向量 RAG）：用目标岗位/关键词/简历/JD 构造查询向量，取最相关知识
+      let items = null;
+      try {
+        const rag = readJSON('ragProfile', {});
+        const queryText = [
+          profile?.target_role || rag.target_role,
+          profile?.target_companies || rag.target_companies,
+          profile?.keywords || rag.keywords,
+          profile?.background || rag.background,
+          resumeInfo, jdInfo
+        ].filter(Boolean).join('\n').slice(0,2000);
+        if(queryText && window.AIProxy){
+          const vecs = await AIProxy.embed(queryText);
+          const qv = vecs && vecs[0];
+          if(qv){
+            const { data, error } = await sb.rpc('match_knowledge_items', { query_embedding: qv, match_count: 8 });
+            if(!error && Array.isArray(data) && data.length) items = data; // 已含 similarity，按相关性排序
+          }
+        }
+      } catch(e){ /* 向量服务/RPC 不可用 → 回退按时间取最近 */ }
+
+      // 3) 回退：向量不可用时仍按时间取最近的知识
+      if(!items){
+        try {
+          const { data, error } = await sb.from('knowledge_items')
+            .select('source,title,summary,content,created_at')
+            .eq('user_id', uid).order('created_at', { ascending:false }).limit(50);
+          if(!error && Array.isArray(data)) items = data;
+        } catch(e){ /* 表不存在 → 用本地兜底 */ }
+      }
+
+      if(items || profile){
+        privateKnowledgeContext = collectKnowledgeContext(items || loadLocalKnowledge(), profile);
+        if(state.messages[0] && state.messages[0].role === 'system'){
+          state.messages[0].content = buildSystemPrompt(privateKnowledgeContext);
+        }
+      }
+    }
+    refreshKnowledgeFromCloud();
 
     // 进度点
     const dotsBox = document.getElementById('progressDots');
@@ -563,27 +694,27 @@ ${roleGuide ? roleGuide + '\n' : ''}
       const glow=document.getElementById('ivGlow');
       const box=document.getElementById('ivStageBox');
       const photoWrap=document.getElementById('ivPhotoWrap'), photoImg=document.getElementById('ivPhoto'), photoGlow=document.getElementById('ivPhotoGlow'), photoMouth=document.getElementById('ivMouthOverlay');
-      const baseL={x:100,y:105}, baseR={x:140,y:105};
+      const baseL={x:100,y:106}, baseR={x:140,y:106};
       let talkRAF=0, blinkTimer=0, gazeTimer=0, mode='idle';
       let usingPhoto=false, lastLevel=0, lastLevelTs=0;
 
-      // 按本轮人设载入照片头像；加载失败则保留矢量形象
+      // 真人照片版：按轮次切换中国真人照片；不叠假嘴型，避免静态照片口型错位
       (function loadPhoto(){
         try{
           const key=(typeof roundKey!=='undefined' && ['mentor','leader','director','hr'].includes(roundKey)) ? roundKey : 'mentor';
           const src='assets/interviewer_'+key+'.png';
           usingPhoto=true;
-          photoWrap.classList.remove('hidden');
-          root.style.display='none';
-          photoImg.onload=()=>{ usingPhoto=true; photoWrap.classList.remove('hidden'); root.style.display='none'; };
-          photoImg.onerror=()=>{ usingPhoto=false; photoWrap.classList.add('hidden'); root.style.display='block'; };
+          if(photoWrap) photoWrap.classList.remove('hidden');
+          if(root) root.style.display='none';
+          photoImg.onload=()=>{ usingPhoto=true; if(photoWrap) photoWrap.classList.remove('hidden'); if(root) root.style.display='none'; };
+          photoImg.onerror=()=>{ usingPhoto=false; if(photoWrap) photoWrap.classList.add('hidden'); if(root) root.style.display='block'; };
           if(!photoImg.getAttribute('src') || !photoImg.getAttribute('src').includes('interviewer_'+key+'.png')) photoImg.src=src;
         }catch(e){ usingPhoto=false; }
       })();
 
       const setMouth=v=>{ if(mouth) mouth.style.transform='scaleY('+v.toFixed(3)+')'; };
-      const setPhotoTalk=v=>{ // v:0..1 → 明显嘴部开合 + 轻微柔光，不再缩放整张照片
-        if(photoMouth) photoMouth.style.transform='translate(-50%,-50%) scaleY('+(0.12+v*1.65).toFixed(3)+')';
+      const setPhotoTalk=v=>{ // 真人照片不做假嘴型，只保留轻微说话光效
+        if(photoMouth) photoMouth.style.opacity='0';
         if(photoGlow) photoGlow.style.opacity=(v*0.7).toFixed(3);
       };
       const setPupils=(dx,dy)=>{

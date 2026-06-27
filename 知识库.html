@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>我的知识库 - AI面镜</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="ai-client.js"></script>
+  <script>
+    tailwind.config = { theme: { extend: {
+      colors: { indigo: { DEFAULT: '#6366F1' }, brandgreen: '#10B981', brandorange: '#F59E0B' },
+      fontFamily: { sans: ['Inter','PingFang SC','Microsoft YaHei','sans-serif'] },
+      boxShadow: { soft:'0 4px 20px rgba(99,102,241,0.08)', softlg:'0 10px 40px rgba(99,102,241,0.15)' },
+    }}};
+  </script>
+  <style>
+    body { background:#F9FAFB; color:#111827; }
+    .gradient-btn { background:linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%); transition:all .25s ease; }
+    .gradient-btn:hover { transform:translateY(-2px); box-shadow:0 10px 30px rgba(99,102,241,.35); }
+    .gradient-text { background:linear-gradient(135deg,#6366F1 0%,#8B5CF6 100%); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+    @keyframes pageFade { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:none} }
+    body > div, body > main { animation:pageFade .5s ease both; }
+  </style>
+</head>
+<body class="font-sans antialiased">
+  <nav class="bg-white border-b border-gray-100 sticky top-0 z-40">
+    <div class="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+      <a href="index.html" class="flex items-center gap-2">
+        <div class="w-9 h-9 rounded-xl gradient-btn flex items-center justify-center text-white text-lg">🪞</div>
+        <span class="text-xl font-bold">AI面镜</span>
+      </a>
+      <div class="flex items-center gap-4 text-sm">
+        <a href="历史成长.html" class="text-gray-500 hover:text-indigo">成长曲线</a>
+        <a href="个人中心.html" class="text-gray-500 hover:text-indigo">个人中心</a>
+        <button onclick="location.href='配置页.html'" class="gradient-btn text-white font-medium px-5 py-2 rounded-lg">+ 新面试</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="max-w-5xl mx-auto px-6 py-8">
+    <div class="grid md:grid-cols-[260px_1fr] gap-6">
+      <aside>
+        <div class="bg-white rounded-2xl shadow-soft p-6 mb-4 text-center">
+          <div class="w-20 h-20 rounded-full bg-indigo/10 flex items-center justify-center text-3xl text-indigo font-bold mx-auto mb-3" id="avatar">U</div>
+          <h3 class="font-bold text-lg" id="nickname">加载中...</h3>
+          <p class="text-sm text-gray-400" id="sideEmail">--</p>
+          <span class="inline-block mt-2 bg-gray-100 text-gray-500 text-xs px-3 py-1 rounded-full">私有知识库</span>
+        </div>
+        <div class="bg-white rounded-2xl shadow-soft p-2">
+          <a href="个人中心.html" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 text-sm text-gray-600">👤 账户信息</a>
+          <a href="历史成长.html" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 text-sm text-gray-600">📈 历史成长</a>
+          <a href="知识库.html" class="flex items-center gap-3 px-4 py-3 rounded-xl bg-indigo/5 text-indigo text-sm font-medium">🧠 我的知识库</a>
+          <a href="会员.html" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 text-sm text-gray-600">💳 我的会员</a>
+          <a href="简历管理.html" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 text-sm text-gray-600">📄 简历管理</a>
+          <a href="设置.html" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 text-sm text-gray-600">⚙️ 设置</a>
+        </div>
+      </aside>
+
+      <main>
+        <section class="bg-white rounded-2xl shadow-soft p-6 mb-6">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <p class="text-sm text-indigo font-medium mb-1">个人中心 / 我的知识库</p>
+              <h1 class="text-2xl font-bold">私有化面试 RAG 知识库</h1>
+              <p class="text-sm text-gray-400 mt-1">知识来源分三层：外部面经情报（预留）、我的真实面经、本站模拟面试历史报告。</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button id="reindexBtn" onclick="backfillEmbeddings()" class="bg-white border border-indigo/20 text-indigo text-sm font-medium px-4 py-2.5 rounded-xl hover:bg-indigo/5 transition" title="为缺少向量的条目建立语义索引，供面试页智能检索">重建语义索引</button>
+              <button onclick="syncReportKnowledge()" class="bg-gray-900 text-white text-sm font-medium px-5 py-2.5 rounded-xl hover:bg-black transition">同步历史报告</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="bg-indigo/5 border border-indigo/10 rounded-2xl p-5 mb-6">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 class="font-bold mb-1">当前面试背景来源</h2>
+              <p class="text-sm text-gray-500">目标岗位和个人背景来自「简历管理」，面试页会读取这些信息和知识库摘要来辅助出题。</p>
+            </div>
+            <button onclick="location.href='简历管理.html'" class="bg-white border border-indigo/20 text-indigo text-sm font-medium px-4 py-2 rounded-xl hover:bg-indigo/5 transition">去简历管理维护</button>
+          </div>
+          <div class="grid md:grid-cols-3 gap-3 mt-4">
+            <div class="bg-white rounded-xl p-4">
+              <div class="text-xs text-gray-400 mb-1">目标岗位</div>
+              <div class="font-semibold text-sm" id="ctxJob">未设置</div>
+            </div>
+            <div class="bg-white rounded-xl p-4">
+              <div class="text-xs text-gray-400 mb-1">当前简历</div>
+              <div class="font-semibold text-sm" id="ctxResume">未选择</div>
+            </div>
+            <div class="bg-white rounded-xl p-4">
+              <div class="text-xs text-gray-400 mb-1">可用于出题的知识</div>
+              <div class="font-semibold text-sm"><span id="ctxKnowledgeCount">0</span> 条</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="bg-white rounded-2xl shadow-soft p-6">
+                      <div class="grid md:grid-cols-4 gap-3 mb-6">
+            <button onclick="setKnowledgeFilter('all')" data-kb-filter="all" class="kb-filter bg-indigo text-white rounded-xl px-4 py-3 text-left transition">
+              <div class="text-sm font-semibold">全部知识</div><div class="text-xs opacity-70 mt-1"><span id="kbCountAll">0</span> 条</div>
+            </button>
+            <button onclick="setKnowledgeFilter('manual')" data-kb-filter="manual" class="kb-filter bg-gray-50 text-gray-600 rounded-xl px-4 py-3 text-left hover:bg-gray-100 transition">
+              <div class="text-sm font-semibold">我的真实面经</div><div class="text-xs opacity-70 mt-1"><span id="kbCountManual">0</span> 条</div>
+            </button>
+            <button onclick="setKnowledgeFilter('report')" data-kb-filter="report" class="kb-filter bg-gray-50 text-gray-600 rounded-xl px-4 py-3 text-left hover:bg-gray-100 transition">
+              <div class="text-sm font-semibold">模拟面试历史</div><div class="text-xs opacity-70 mt-1"><span id="kbCountReport">0</span> 条</div>
+            </button>
+                        <button onclick="setKnowledgeFilter('external')" data-kb-filter="external" class="kb-filter bg-gray-50 text-gray-600 rounded-xl px-4 py-3 text-left hover:bg-gray-100 transition">
+                          <div class="text-sm font-semibold">外部面经情报</div><div class="text-xs opacity-70 mt-1"><span id="kbCountExternal">0</span> 条</div>
+                        </button>
+          </div>
+
+          <div class="border border-indigo/10 bg-indigo/5 rounded-2xl p-5 mb-6">
+            <h3 class="font-bold text-sm mb-3">新增我的真实面经</h3>
+            <div class="grid md:grid-cols-2 gap-3 mb-3">
+              <input id="expCompany" class="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo" placeholder="公司 / 组织" />
+              <input id="expRole" class="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo" placeholder="岗位 / 方向" />
+              <input id="expRound" class="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo" placeholder="轮次（如 HR面 / 业务一面）" />
+              <input id="expTags" class="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo" placeholder="标签（逗号分隔）" />
+            </div>
+            <textarea id="expContent" rows="4" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo resize-none" placeholder="记录真实面试题、你的回答、复盘、面试官反馈、踩坑点等。"></textarea>
+            <div class="mt-3 flex items-center justify-between">
+              <span id="kbSaveState" class="text-xs text-gray-400"></span>
+              <button onclick="addManualExperience()" class="gradient-btn text-white text-sm font-medium px-5 py-2.5 rounded-xl">保存到知识库</button>
+            </div>
+          </div>
+
+                      <div class="bg-amber-50 border border-amber-100 rounded-2xl p-5 mb-6">
+                        <div class="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                          <div class="flex-1">
+                            <div class="text-sm font-semibold text-amber-700 mb-1">外部面经情报</div>
+                            <p class="text-xs text-amber-700/80">根据「简历管理」里的目标岗位 / 公司 / 关键词联网搜集面经，AI 自动清洗去重并建立语义索引，供面试出题参考。</p>
+                            <p class="text-xs text-amber-700/70 mt-2" id="externalStatus">最近搜集：加载中…</p>
+                          </div>
+                          <div class="flex flex-col items-stretch md:items-end gap-2 flex-shrink-0">
+                            <button id="collectNowBtn" onclick="collectExternalNow()" class="bg-amber-500 text-white text-sm font-medium px-4 py-2 rounded-xl hover:bg-amber-600 transition whitespace-nowrap">立即搜集一次</button>
+                            <label class="flex items-center gap-2 text-xs text-amber-700 cursor-pointer">
+                              <input id="weeklyToggle" type="checkbox" class="w-4 h-4 accent-amber-500" onchange="toggleWeekly()" /> 每周自动搜集
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+
+          <div id="knowledgeList" class="space-y-3"></div>
+          <div id="knowledgeEmpty" class="hidden text-center py-10 text-sm text-gray-400">暂无知识条目。可以先新增一条真实面经，或同步历史报告。</div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <div id="editModal" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl max-w-xl w-full max-h-[88vh] flex flex-col">
+      <div class="flex items-center justify-between p-5 border-b border-gray-100">
+        <h3 class="font-bold">编辑知识条目</h3>
+        <button onclick="closeEditModal()" class="text-gray-400 hover:text-gray-700 text-xl">✕</button>
+      </div>
+      <div class="p-5 overflow-y-auto space-y-3">
+        <input id="editTitle" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo" placeholder="标题" />
+        <div class="grid md:grid-cols-3 gap-3">
+          <input id="editCompany" class="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo" placeholder="公司 / 组织" />
+          <input id="editRole" class="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo" placeholder="岗位 / 方向" />
+          <input id="editRound" class="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo" placeholder="轮次" />
+        </div>
+        <input id="editTags" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo" placeholder="标签（逗号分隔）" />
+        <textarea id="editContent" rows="8" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo resize-none" placeholder="内容"></textarea>
+      </div>
+      <div class="flex items-center justify-between gap-3 p-5 border-t border-gray-100">
+        <span id="editState" class="text-xs text-gray-400"></span>
+        <div class="flex items-center gap-2">
+          <button onclick="closeEditModal()" class="text-sm text-gray-500 px-4 py-2 rounded-xl hover:bg-gray-50">取消</button>
+          <button onclick="saveEdit()" class="gradient-btn text-white text-sm font-medium px-5 py-2 rounded-xl">保存修改</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = window.SUPABASE_URL;
+    const SUPABASE_KEY = window.SUPABASE_KEY;
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    let currentUser = null;
+    let knowledgeItems = [];
+    let knowledgeFilter = 'all';
+
+    function escapeHtml(value){
+      return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function localKey(name){ return `aimianjing:${currentUser?.id || 'anon'}:${name}`; }
+    function readLocalArray(name){ try{ return JSON.parse(localStorage.getItem(localKey(name)) || '[]'); }catch(e){ return []; } }
+    function writeLocalArray(name, arr){ localStorage.setItem(localKey(name), JSON.stringify(arr)); }
+    function normalizeTags(value){
+      if(Array.isArray(value)) return value.map(String).map(s=>s.trim()).filter(Boolean).slice(0,12);
+      return String(value||'').split(/[,，、\s]+/).map(s=>s.trim()).filter(Boolean).slice(0,12);
+    }
+    function readJSON(key, fallback){ try{return JSON.parse(localStorage.getItem(key)||JSON.stringify(fallback));}catch(e){return fallback;} }
+
+    async function init(){
+      const { data:{ user } } = await sb.auth.getUser();
+      if(!user){ alert('请先登录'); location.href='登录页.html'; return; }
+      currentUser = user;
+      document.getElementById('sideEmail').textContent = user.email;
+      const nickname = localStorage.getItem('nickname') || user.email.split('@')[0];
+      document.getElementById('nickname').textContent = nickname;
+      document.getElementById('avatar').textContent = nickname.charAt(0).toUpperCase();
+      renderContext();
+      await loadKnowledge();
+      await loadExternalStatus();
+      await syncReportKnowledge({ silent:true });
+    }
+
+    async function loadExternalStatus(){
+      try{
+        const { data } = await sb.from('user_profiles')
+          .select('weekly_collect_enabled,last_external_collect_at,last_external_collect_count')
+          .eq('user_id', currentUser.id).maybeSingle();
+        const toggle = document.getElementById('weeklyToggle');
+        const status = document.getElementById('externalStatus');
+        if(data){
+          toggle.checked = data.weekly_collect_enabled === true;
+          if(data.last_external_collect_at){
+            const t = new Date(data.last_external_collect_at).toLocaleString('zh-CN');
+            status.textContent = `最近搜集：${t} · 新增 ${data.last_external_collect_count ?? 0} 条`;
+          } else {
+            status.textContent = '最近搜集：从未（点右侧立即搜集一次）';
+          }
+        } else {
+          status.textContent = '最近搜集：从未（点右侧立即搜集一次）';
+        }
+      }catch(e){
+        document.getElementById('externalStatus').textContent = '最近搜集：需先执行建表 SQL';
+      }
+    }
+    async function collectExternalNow(){
+      const btn = document.getElementById('collectNowBtn');
+      const orig = btn.textContent; btn.disabled = true; btn.textContent = '搜集中…（约 20-40 秒）';
+      try{
+        const { data, error } = await sb.functions.invoke('collect-external-knowledge', { body:{} });
+        if(error) throw error;
+        if(data && data.ok === false) throw new Error(data.error || '搜集失败');
+        const n = (data && data.inserted) || 0;
+        btn.textContent = n ? `新增 ${n} 条` : ((data && data.message) || '暂无新面经');
+        await loadKnowledge();
+        await loadExternalStatus();
+      }catch(e){
+        console.warn('外部搜集失败', e);
+        const msg = e && e.message ? e.message : '搜集失败，稍后再试';
+        btn.textContent = msg.length <= 24 ? msg : '搜集失败，稍后再试';
+      }finally{
+        setTimeout(()=>{ btn.textContent = orig; btn.disabled = false; }, 2800);
+      }
+    }
+    async function toggleWeekly(){
+      const on = document.getElementById('weeklyToggle').checked;
+      try{
+        const { error } = await sb.from('user_profiles').upsert(
+          { user_id: currentUser.id, weekly_collect_enabled: on, updated_at: new Date().toISOString() },
+          { onConflict:'user_id' }
+        );
+        if(error) throw error;
+        try{ const rp = readJSON('ragProfile', {}); rp.weekly_collect_enabled = on; localStorage.setItem('ragProfile', JSON.stringify(rp)); }catch(_){}
+      }catch(e){
+        console.warn('每周开关保存失败', e);
+        document.getElementById('weeklyToggle').checked = !on; // 回滚 UI
+      }
+    }
+
+    function renderContext(){
+      const online = readJSON('onlineResume', {});
+      const versions = readJSON('resumeVersions', []);
+      const active = localStorage.getItem('activeResumeId');
+      const activeName = active === 'online' ? '在线简历' : (versions.find(v=>v.id===active)?.name || (localStorage.getItem('resumeInfo') ? '当前浏览器简历' : '未选择'));
+      document.getElementById('ctxJob').textContent = online.job || localStorage.getItem('targetJob') || '未设置';
+      document.getElementById('ctxResume').textContent = activeName;
+      document.getElementById('ctxKnowledgeCount').textContent = knowledgeItems.length;
+    }
+
+    function typeLabel(type){
+      return type === 'manual' ? '我的真实面经' : type === 'report' ? '模拟面试历史' : '外部面经情报';
+    }
+    function localKnowledgeUpsert(item){
+      const arr = readLocalArray('knowledgeItems');
+      const key = item.source_ref ? `${item.source}:${item.source_ref}` : item.id;
+      const idx = arr.findIndex(x => (x.source_ref ? `${x.source}:${x.source_ref}` : x.id) === key);
+      if(idx >= 0) arr[idx] = { ...arr[idx], ...item, updated_at:new Date().toISOString() };
+      else arr.unshift({ id:item.id || `local_${Date.now()}_${Math.random().toString(16).slice(2)}`, ...item, created_at:new Date().toISOString() });
+      writeLocalArray('knowledgeItems', arr.slice(0,200));
+      return arr;
+    }
+    // 用于向量化的代表性文本
+    function embedTextFor(item){
+      return [item.title, item.summary, item.content].filter(Boolean).join('\n').slice(0,2000);
+    }
+    async function saveKnowledgeItem(item, opts={}){
+      const localItem = { ...item, tags: normalizeTags(item.tags), user_id: currentUser.id };
+      localKnowledgeUpsert(localItem);
+      // 需要语义检索的条目（手动录入/编辑）即时生成向量；批量同步报告时不内联向量，避免一次性消耗大量额度（用「重建语义索引」批量补）
+      let embedding = null;
+      if(opts.embed && window.AIProxy){
+        try{ const vecs = await AIProxy.embed(embedTextFor(localItem)); embedding = (vecs && vecs[0]) || null; }
+        catch(e){ console.warn('向量生成失败（不影响保存）：', e); }
+      }
+      try{
+        const cloudPayload = { ...localItem };
+        // 本地伪 id 不能写入云端 uuid 主键；去掉让数据库按 onConflict 生成/匹配
+        if(cloudPayload.id && String(cloudPayload.id).startsWith('local_')) delete cloudPayload.id;
+        if(embedding) cloudPayload.embedding = embedding;
+        const cols = 'id,user_id,source,source_ref,title,summary,content,company,role,round,tags,metadata,created_at,updated_at';
+        const { data, error } = await sb.from('knowledge_items').upsert(cloudPayload, { onConflict:'user_id,source,source_ref' }).select(cols).single();
+        if(error) throw error;
+        return data;
+      }catch(e){
+        console.warn('知识条目云端保存失败，已保存本地：', e);
+        return localItem;
+      }
+    }
+    async function loadKnowledge(){
+      const localItems = readLocalArray('knowledgeItems');
+      try{
+        const cols = 'id,user_id,source,source_ref,title,summary,content,company,role,round,tags,metadata,created_at,updated_at';
+        const { data, error } = await sb.from('knowledge_items').select(cols).eq('user_id', currentUser.id).order('created_at', { ascending:false }).limit(200);
+        if(error) throw error;
+        knowledgeItems = (data && data.length) ? data : localItems;
+      }catch(e){
+        console.warn('知识库云端加载失败，使用本地数据：', e);
+        knowledgeItems = localItems;
+      }
+      renderKnowledge();
+      renderContext();
+    }
+    function setKnowledgeFilter(type){
+      knowledgeFilter = type;
+      document.querySelectorAll('.kb-filter').forEach(btn=>{
+        const active = btn.dataset.kbFilter === type;
+        btn.className = 'kb-filter rounded-xl px-4 py-3 text-left transition ' + (active ? 'bg-indigo text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100');
+      });
+      renderKnowledge();
+    }
+    function renderKnowledge(){
+      const all = knowledgeItems || [];
+      const visible = knowledgeFilter === 'all' ? all : all.filter(x => x.source === knowledgeFilter);
+      document.getElementById('kbCountAll').textContent = all.length;
+      document.getElementById('kbCountManual').textContent = all.filter(x=>x.source==='manual').length;
+      document.getElementById('kbCountReport').textContent = all.filter(x=>x.source==='report').length;
+                  document.getElementById('kbCountExternal').textContent = all.filter(x=>x.source==='external').length;
+      document.getElementById('ctxKnowledgeCount').textContent = all.length;
+      const list = document.getElementById('knowledgeList');
+      const empty = document.getElementById('knowledgeEmpty');
+      list.innerHTML = '';
+      empty.classList.toggle('hidden', visible.length > 0);
+      visible.forEach(item=>{
+        const tags = normalizeTags(item.tags);
+        const div = document.createElement('div');
+        div.className = 'border border-gray-100 rounded-2xl p-4 hover:border-indigo/30 hover:shadow-soft transition';
+        div.innerHTML = `
+          <div class="flex items-start justify-between gap-3 mb-2">
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-[11px] px-2 py-0.5 rounded-full ${item.source==='manual'?'bg-emerald-50 text-brandgreen':item.source==='report'?'bg-indigo/10 text-indigo':'bg-amber-50 text-brandorange'}">${typeLabel(item.source)}</span>
+                <span class="text-xs text-gray-300">${escapeHtml((item.created_at||'').slice(0,10))}</span>
+              </div>
+              <h3 class="font-semibold text-sm text-gray-800">${escapeHtml(item.title || '未命名知识')}</h3>
+            </div>
+            <div class="flex items-center gap-1 flex-shrink-0">
+              <button class="kb-edit text-xs px-2.5 py-1 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 transition">编辑</button>
+              <button class="kb-del text-xs px-2.5 py-1 rounded-lg border border-red-200 text-red-500 hover:bg-red-50 transition">删除</button>
+            </div>
+          </div>
+          <p class="text-sm text-gray-500 leading-relaxed whitespace-pre-wrap">${escapeHtml(item.summary || item.content || '').slice(0,260)}</p>
+          ${tags.length ? `<div class="flex flex-wrap gap-1.5 mt-3">${tags.map(t=>`<span class="text-[11px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+        `;
+        div.querySelector('.kb-edit').addEventListener('click', ()=>openEditModal(item));
+        div.querySelector('.kb-del').addEventListener('click', ()=>deleteKnowledgeItem(item));
+        list.appendChild(div);
+      });
+    }
+    function sameItem(a, b){
+      if(!a || !b) return false;
+      if(a.id && b.id && !String(a.id).startsWith('local_') && !String(b.id).startsWith('local_')) return a.id === b.id;
+      return a.source === b.source && a.source_ref === b.source_ref;
+    }
+    async function deleteKnowledgeItem(item){
+      if(!confirm('确定删除这条知识吗？删除后无法恢复。')) return;
+      try{
+        let q = sb.from('knowledge_items').delete().eq('user_id', currentUser.id);
+        if(item.id && !String(item.id).startsWith('local_')) q = q.eq('id', item.id);
+        else q = q.eq('source', item.source).eq('source_ref', item.source_ref);
+        const { error } = await q;
+        if(error) throw error;
+      }catch(e){ console.warn('云端删除失败，仍删除本地：', e); }
+      writeLocalArray('knowledgeItems', readLocalArray('knowledgeItems').filter(x => !sameItem(x, item)));
+      knowledgeItems = knowledgeItems.filter(x => !sameItem(x, item));
+      renderKnowledge(); renderContext();
+    }
+    let editingItem = null;
+    function openEditModal(item){
+      editingItem = item;
+      document.getElementById('editTitle').value = item.title || '';
+      document.getElementById('editCompany').value = item.company || (item.metadata && item.metadata.company) || '';
+      document.getElementById('editRole').value = item.role || (item.metadata && item.metadata.role) || '';
+      document.getElementById('editRound').value = item.round || (item.metadata && item.metadata.round) || '';
+      document.getElementById('editTags').value = normalizeTags(item.tags).join(', ');
+      document.getElementById('editContent').value = item.content || item.summary || '';
+      document.getElementById('editState').textContent = '';
+      const m = document.getElementById('editModal');
+      m.classList.remove('hidden'); m.classList.add('flex');
+    }
+    function closeEditModal(){
+      const m = document.getElementById('editModal');
+      m.classList.add('hidden'); m.classList.remove('flex');
+      editingItem = null;
+    }
+    async function saveEdit(){
+      if(!editingItem) return;
+      const state = document.getElementById('editState');
+      const content = document.getElementById('editContent').value.trim();
+      if(!content){ state.textContent = '内容不能为空'; return; }
+      const company = document.getElementById('editCompany').value.trim();
+      const role = document.getElementById('editRole').value.trim();
+      const round = document.getElementById('editRound').value.trim();
+      const tags = normalizeTags(document.getElementById('editTags').value);
+      const title = document.getElementById('editTitle').value.trim() || editingItem.title || '未命名知识';
+      state.textContent = '保存中…（重新生成语义向量）';
+      const updated = {
+        ...editingItem,
+        title, company, role, round, tags,
+        content,
+        summary: content.slice(0,180),
+        metadata: { ...(editingItem.metadata||{}), company, role, round },
+      };
+      delete updated.embedding; // 由 saveKnowledgeItem 重新生成
+      const target = editingItem;
+      const saved = await saveKnowledgeItem(updated, { embed:true });
+      knowledgeItems = knowledgeItems.map(x => sameItem(x, target) ? saved : x);
+      closeEditModal();
+      renderKnowledge(); renderContext();
+    }
+    async function backfillEmbeddings(){
+      const btn = document.getElementById('reindexBtn');
+      const orig = btn.textContent; btn.disabled = true;
+      try{
+        const { data, error } = await sb.from('knowledge_items')
+          .select('id,title,summary,content').eq('user_id', currentUser.id).is('embedding', null).limit(96);
+        if(error) throw error;
+        const todo = data || [];
+        if(!todo.length){ btn.textContent = '已全部建立索引'; setTimeout(()=>{ btn.textContent = orig; btn.disabled = false; }, 1600); return; }
+        let done = 0;
+        for(let i=0; i<todo.length; i+=16){
+          const batch = todo.slice(i, i+16);
+          btn.textContent = `建立索引中… ${done}/${todo.length}`;
+          let vecs = [];
+          try{ vecs = await AIProxy.embed(batch.map(embedTextFor)); }catch(e){ console.warn('批量向量失败', e); break; }
+          for(let j=0; j<batch.length; j++){
+            if(!vecs[j]) continue;
+            const { error:upErr } = await sb.from('knowledge_items').update({ embedding: vecs[j] }).eq('id', batch[j].id);
+            if(!upErr) done++;
+          }
+        }
+        btn.textContent = `已索引 ${done} 条`;
+        setTimeout(()=>{ btn.textContent = orig; btn.disabled = false; }, 2000);
+      }catch(e){
+        console.warn('重建语义索引失败', e);
+        btn.textContent = '需先执行建表 SQL'; setTimeout(()=>{ btn.textContent = orig; btn.disabled = false; }, 2000);
+      }
+    }
+    async function addManualExperience(){
+      const state = document.getElementById('kbSaveState');
+      const company = document.getElementById('expCompany').value.trim();
+      const role = document.getElementById('expRole').value.trim();
+      const round = document.getElementById('expRound').value.trim();
+      const tags = normalizeTags(document.getElementById('expTags').value);
+      const content = document.getElementById('expContent').value.trim();
+      if(!content){ state.textContent = '请先填写面试经验内容'; return; }
+      state.textContent = '保存中…';
+      const title = [company, role, round].filter(Boolean).join(' · ') || '我的面试经验';
+      const saved = await saveKnowledgeItem({
+        source:'manual',
+        source_ref:`manual_${Date.now()}`,
+        title,
+        summary:content.slice(0,180),
+        content,
+        company, role, round,
+        tags,
+        metadata:{ company, role, round },
+      }, { embed:true });
+      knowledgeItems = [saved, ...knowledgeItems.filter(x => !(x.source === saved.source && x.source_ref === saved.source_ref))];
+      renderKnowledge();
+      ['expCompany','expRole','expRound','expTags','expContent'].forEach(id=>document.getElementById(id).value='');
+      state.textContent = '已保存到知识库';
+    }
+    function reportToKnowledgeItem(record){
+      const report = record.report || {};
+      const qa = record.qa_records || record.qaRecords || [];
+      const total = record.total_score ?? record.totalScore ?? '';
+      const job = record.job_name || record.jobName || '模拟面试';
+      const level = record.level_name || record.levelName || '';
+      const type = record.type_list || record.typeList || '综合面试';
+      const qaText = qa.map((r,i)=>`Q${i+1}: ${r.question || ''}\nA${i+1}: ${r.answer || ''}`).join('\n\n');
+      return {
+        source:'report',
+        source_ref:String(record.id || record.created_at || record.date || `${job}_${Date.now()}`),
+        title:`${job}${level ? ' · '+level : ''} · ${type} · 得分${total}`,
+        summary:report.overallComment || `模拟面试报告，综合得分 ${total}`,
+        content:[`综合评价：${report.overallComment || ''}`, `改进建议：${(report.suggestions || []).join('；')}`, qaText].filter(Boolean).join('\n\n'),
+        role:job,
+        round:type,
+        tags:normalizeTags([job, level, type, '模拟面试', '报告']),
+        metadata:{ score:total, scores:record.scores || report.scores || {}, qa_count:qa.length },
+      };
+    }
+    async function syncReportKnowledge(opts={}){
+      let count = 0;
+      try{
+        const { data, error } = await sb.from('interview_records').select('*').eq('user_id', currentUser.id).order('created_at', { ascending:false }).limit(100);
+        if(error) throw error;
+        for(const record of (data || [])){
+          const saved = await saveKnowledgeItem(reportToKnowledgeItem(record));
+          knowledgeItems = [saved, ...knowledgeItems.filter(x => !(x.source === saved.source && x.source_ref === saved.source_ref))];
+          count++;
+        }
+      }catch(e){
+        console.warn('云端历史报告同步失败，尝试同步本地历史：', e);
+        const localHistory = JSON.parse(localStorage.getItem('interviewHistory') || '[]');
+        for(const record of localHistory){
+          const saved = await saveKnowledgeItem(reportToKnowledgeItem(record));
+          knowledgeItems = [saved, ...knowledgeItems.filter(x => !(x.source === saved.source && x.source_ref === saved.source_ref))];
+          count++;
+        }
+      }
+      renderKnowledge();
+      if(!opts.silent) alert(count ? `已同步 ${count} 份历史报告到知识库` : '暂无可同步的历史报告');
+    }
+    init();
+  </script>
+</body>
+</html>
