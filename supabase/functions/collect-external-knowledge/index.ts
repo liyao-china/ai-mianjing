@@ -41,7 +41,7 @@ function isAllowedOrigin(origin: string): boolean {
 function corsHeaders(origin: string): Record<string, string> {
   return {
     "Access-Control-Allow-Origin": isAllowedOrigin(origin) ? (origin || DEFAULT_ORIGIN) : DEFAULT_ORIGIN,
-    "Access-Control-Allow-Headers": "authorization, content-type",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Vary": "Origin",
   };
