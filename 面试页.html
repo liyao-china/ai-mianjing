@@ -192,6 +192,11 @@
         </svg>
       </div>
       <div id="turnHint" class="mt-7 text-white bg-black/38 backdrop-blur px-5 py-2 rounded-full text-sm">等待面试开始</div>
+      <!-- 题目字幕卡：文字模式必显示；语音/视频模式可用底部「字幕」开关打开；TTS 失败时强制兜底 -->
+      <div id="stageQuestion" class="hidden mt-4 w-[min(92vw,640px)] bg-white/88 backdrop-blur border border-white/70 shadow-soft rounded-2xl px-6 py-4 text-left">
+        <div class="text-[11px] text-indigo font-semibold mb-1 tracking-wide">🎙️ 面试官的问题</div>
+        <div id="stageQuestionText" class="text-sm text-gray-700 leading-relaxed"></div>
+      </div>
     </div>
   </section>
 
@@ -239,6 +244,7 @@
       </div>
       <div class="flex items-center justify-center gap-3 mt-4">
         <button id="switchModeBtn" class="text-sm text-gray-500 hover:text-indigo px-4 py-2 rounded-lg border border-gray-200 hover:border-indigo transition">⌨️ 切换文字</button>
+        <button id="subtitleBtn" class="text-sm text-gray-500 hover:text-indigo px-4 py-2 rounded-lg border border-gray-200 hover:border-indigo transition">💬 字幕：关</button>
         <button id="nextBtn" class="gradient-btn text-white text-sm font-medium px-6 py-2 rounded-lg hidden">✓ 提交回答</button>
       </div>
     </div>
@@ -684,6 +690,27 @@ ${roleGuide ? roleGuide + '\n' : ''}
       if(r) r.classList.toggle('hidden', !speaking);
     }
 
+    /* ===== 题目字幕：文字模式必须能看到题目（安静环境无法听语音）；语音/视频模式可手动开字幕；TTS 失败时强制兜底 ===== */
+    let subtitlePref = localStorage.getItem('interviewSubtitle') === '1'; // 语音/视频模式下的用户偏好
+    let subtitleForced = false; // 在线语音完全失败时强制打开，避免"既听不到也看不到"
+    function subtitleVisible(){ return state.inputMode==='text' || subtitlePref || subtitleForced; }
+    function setStageQuestionText(text){
+      const card=document.getElementById('stageQuestion'), el=document.getElementById('stageQuestionText');
+      if(!card || !el) return;
+      el.textContent = text || '';
+      card.classList.toggle('hidden', !(subtitleVisible() && text));
+    }
+    // 模式/开关变化后刷新：把当前题目（state.lastQuestion）按最新可见性重新渲染
+    function refreshStageQuestion(){ setStageQuestionText(state.lastQuestion || ''); updateSubtitleBtn(); }
+    function updateSubtitleBtn(){
+      const b=document.getElementById('subtitleBtn'); if(!b) return;
+      // 文字模式下字幕必开，无需开关
+      b.classList.toggle('hidden', state.inputMode==='text');
+      b.textContent = subtitlePref ? '💬 字幕：开' : '💬 字幕：关';
+      b.classList.toggle('text-indigo', subtitlePref);
+      b.classList.toggle('border-indigo', subtitlePref);
+    }
+
     // ===== 拟真面试官形象控制：照片底图(按轮次切换) + 矢量兜底；说话动嘴/律动、点头、呼吸、眨眼、思考·聆听 =====
     const avatar = (function(){
       const root=document.getElementById('ivAvatar');
@@ -928,12 +955,15 @@ ${roleGuide ? roleGuide + '\n' : ''}
       const typingEl = bubble.querySelector('[data-ai-typing]');
 
       // ① 文字立刻打字机显示，不再等待 TTS（即使语音很慢/失败，也能马上阅读题目）
+      //    同步镜像到舞台字幕卡：文字模式必显示，语音/视频看字幕开关
       let typed=0, typer=null;
-      const finalizeText=()=>{ if(typer){ clearInterval(typer); typer=null; } if(textEl) textEl.textContent=fullText; if(typingEl && typingEl.parentNode) typingEl.remove(); };
+      const finalizeText=()=>{ if(typer){ clearInterval(typer); typer=null; } if(textEl) textEl.textContent=fullText; if(typingEl && typingEl.parentNode) typingEl.remove(); setStageQuestionText(fullText); };
+      setStageQuestionText(''); // 新题开始：清掉上一题字幕
       typer=setInterval(()=>{
         if(seq!==ttsSeq){ finalizeText(); return; }
         typed=Math.min(fullText.length, typed+1);
         if(textEl) textEl.textContent=fullText.slice(0,typed);
+        setStageQuestionText(fullText.slice(0,typed));
         scrollBottom();
         if(typed>=fullText.length){ clearInterval(typer); typer=null; if(typingEl && typingEl.parentNode) typingEl.remove(); }
       }, 26);
@@ -965,6 +995,9 @@ ${roleGuide ? roleGuide + '\n' : ''}
       }
       if(seq!==ttsSeq){ finalizeText(); avatar.setMode('listening'); return; }
       if(!anyVoice){
+        // 在线 TTS 完全失败：强制打开字幕兜底，避免语音模式下"既听不到也看不到题目"
+        subtitleForced = true;
+        refreshStageQuestion();
         await speakBrowserSentence(fullText); // 在线 TTS 完全不可用时，才整段用同一个本机音色兜底
         anyVoice=true;
       }
@@ -1090,6 +1123,7 @@ ${roleGuide ? roleGuide + '\n' : ''}
       document.getElementById('switchModeBtn').textContent='🎙️ 切换语音';
       if(state.waitingAnswer){ const n=document.getElementById('nextBtn'); n.classList.remove('hidden'); n.textContent='✓ 提交回答'; }
       updateConfigLabel();
+      refreshStageQuestion(); // 文字模式必须能看到当前题目
       document.getElementById('textInput')?.focus();
     }
 
@@ -1154,6 +1188,13 @@ ${roleGuide ? roleGuide + '\n' : ''}
       if(state.inputMode==='text'){ document.getElementById('voiceMode').classList.add('hidden'); document.getElementById('textMode').classList.remove('hidden'); btn.textContent='🎙️ 切换语音'; if(state.waitingAnswer){ document.getElementById('nextBtn').classList.remove('hidden'); document.getElementById('nextBtn').textContent='✓ 提交回答'; } }
       else { document.getElementById('voiceMode').classList.remove('hidden'); document.getElementById('textMode').classList.add('hidden'); btn.textContent='⌨️ 切换文字'; document.getElementById('nextBtn').classList.add('hidden'); }
       updateConfigLabel();
+      refreshStageQuestion(); // 切模式后按最新可见性重渲染字幕
+    });
+
+    document.getElementById('subtitleBtn').addEventListener('click',()=>{
+      subtitlePref = !subtitlePref;
+      localStorage.setItem('interviewSubtitle', subtitlePref ? '1' : '0');
+      refreshStageQuestion();
     });
 
     /* ===== 麦克风音量分析 + 语音识别 ===== */
@@ -2001,7 +2042,8 @@ ${qaText}
     /* ===== 启动 ===== */
     function startFlow(){
       state.started=true; // 面试正式开始：用于刷新/离开保护
-      if(state.inputMode==='text'){ document.getElementById('voiceMode').classList.add('hidden'); document.getElementById('textMode').classList.remove('hidden'); }
+      if(state.inputMode==='text'){ document.getElementById('voiceMode').classList.add('hidden'); document.getElementById('textMode').classList.remove('hidden'); document.getElementById('switchModeBtn').textContent='🎙️ 切换语音'; }
+      updateSubtitleBtn(); // 初始化字幕开关可见性（文字模式下隐藏，字幕必显）
       startTimer();
       deliverFirstQuestion();
     }
