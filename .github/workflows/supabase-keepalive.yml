@@ -1,0 +1,22 @@
+# Supabase 免费版保活：每 3 天 ping 一次 REST API，防止「连续 1 周无活动」被自动暂停。
+# anon key 是前端公开密钥（supabase-config.js 里同一个），受 RLS 保护，可安全出现在仓库中。
+name: Supabase Keepalive
+
+on:
+  schedule:
+    - cron: "0 1 */3 * *" # 每 3 天 UTC 01:00 触发一次
+  workflow_dispatch: {} # 支持手动触发，便于验证
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST API
+        run: |
+          ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNreHBmZ3F5bGZwYXZvaXVyZmhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0NjE5NTYsImV4cCI6MjA5NjAzNzk1Nn0._UcR6vWOppvwcqYaHFqIlKJrADRaRZDOpBDLIdPXncY"
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://skxpfgqylfpavoiurfhr.supabase.co/rest/v1/interview_records?select=id&limit=1" \
+            -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY" --max-time 30)
+          echo "Supabase REST 响应: HTTP $CODE"
+          # 200=正常; 其他状态码说明项目可能已被暂停或异常，让工作流失败以便收到 GitHub 邮件提醒
+          [ "$CODE" = "200" ]
