@@ -1,9 +1,11 @@
 // @ts-nocheck
 // 外部面经情报自动搜集 Edge Function（第二层知识库）
-// 流程：读 user_profiles(target_role/target_companies/keywords) → 生成搜索词 → Tavily 联网搜索
+// 流程：读 user_profiles(target_role/target_companies/keywords) → 生成搜索词 → 联网搜索
 //      → LLM 清洗去重摘要 → 生成 embedding → 写入 knowledge_items(source='external')
+// 搜索源：优先博查 Bocha（中文覆盖强：知乎/公众号/百科等），未配置时回退 Tavily（英文为主）。
 // 部署：supabase functions deploy collect-external-knowledge --no-verify-jwt
-// 密钥：supabase secrets set TAVILY_API_KEY=tvly-xxx
+// 密钥：supabase secrets set BOCHA_API_KEY=sk-xxx        # 推荐，中文面经源
+//      supabase secrets set TAVILY_API_KEY=tvly-xxx     # 可选兜底
 //      supabase secrets set CRON_SECRET=<自定义随机串>   # 供每周定时任务调用
 //      （已有 DASHSCOPE_API_KEY / SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY）
 // 两种调用模式：
@@ -14,6 +16,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const DASHSCOPE_KEY = Deno.env.get("DASHSCOPE_API_KEY") ?? "";
 const TAVILY_KEY = Deno.env.get("TAVILY_API_KEY") ?? "";
+const BOCHA_KEY = Deno.env.get("BOCHA_API_KEY") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const CRON_SECRET = Deno.env.get("CRON_SECRET") ?? "";
@@ -24,6 +27,10 @@ const CHAT_MODEL = "qwen-plus";
 const EMBED_MODEL = "text-embedding-v3";
 const EMBED_DIM = 1024;
 const TAVILY_URL = "https://api.tavily.com/search";
+const BOCHA_URL = "https://api.bochaai.com/v1/web-search";
+
+// 当前生效的搜索源：有博查 key 用博查（中文强），否则回退 Tavily
+const SEARCH_PROVIDER = BOCHA_KEY ? "bocha" : (TAVILY_KEY ? "tavily" : "");
 
 const MAX_QUERIES = 4;          // 每次最多生成 4 个搜索词
 const RESULTS_PER_QUERY = 4;    // 每个搜索词取 4 条
@@ -64,13 +71,40 @@ function buildQueries(profile: any): string[] {
   const companies = splitList(profile.target_companies || "");
   const keywords = splitList(profile.keywords || "");
   const queries: string[] = [];
-  if (companies[0] && role) queries.push(`${companies[0]} ${role} 面经`);
-  if (role) queries.push(`${role} 面试 高频问题`);
-  if (role) queries.push(`${role} 面试经验 复盘`);
+  // 带平台关键词能显著提升中文面经命中率（知乎/牛客等正文较多）
+  if (companies[0] && role) queries.push(`${companies[0]} ${role} 面经 知乎`);
+  if (role) queries.push(`${role} 面试 高频问题 牛客`);
+  if (role) queries.push(`${role} 面试经验 复盘 知乎`);
   if (keywords[0] && role) queries.push(`${role} ${keywords[0]} 面试题`);
   if (companies[1] && role) queries.push(`${companies[1]} ${role} 面试流程`);
   if (!role && keywords[0]) queries.push(`${keywords[0]} 面试 高频问题`);
   return [...new Set(queries.filter((q) => q.trim()))].slice(0, MAX_QUERIES);
+}
+
+// 统一搜索入口：按 SEARCH_PROVIDER 分发，返回 [{title,url,content}]
+async function searchWeb(query: string): Promise<any[]> {
+  if (SEARCH_PROVIDER === "bocha") return await bochaSearch(query);
+  return await tavilySearch(query);
+}
+
+async function bochaSearch(query: string): Promise<any[]> {
+  const res = await fetch(BOCHA_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${BOCHA_KEY}` },
+    body: JSON.stringify({ query, freshness: "oneYear", summary: true, count: RESULTS_PER_QUERY }),
+    signal: AbortSignal.timeout(20_000),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || (data?.code && data.code !== 200)) {
+    throw new Error(data?.msg || data?.message || `搜索失败(${res.status})`);
+  }
+  // 兼容 data.webPages 与 data.data.webPages 两种返回结构
+  const pages = data?.data?.webPages?.value || data?.webPages?.value || [];
+  return (Array.isArray(pages) ? pages : []).map((p: any) => ({
+    title: p.name || p.title || "",
+    url: p.url || "",
+    content: p.summary || p.snippet || "",
+  }));
 }
 
 async function tavilySearch(query: string): Promise<any[]> {
@@ -132,10 +166,10 @@ async function collectForUser(admin: any, userId: string, opts: { isCron?: boole
   const raw: any[] = [];
   for (const q of queries) {
     try {
-      const results = await tavilySearch(q);
+      const results = await searchWeb(q);
       results.forEach((r) => raw.push({ query: q, ...r }));
     } catch (e) {
-      console.warn("tavily query failed:", q, (e as Error).message);
+      console.warn(`${SEARCH_PROVIDER} query failed:`, q, (e as Error).message);
     }
   }
   if (!raw.length) return { ok: true, inserted: 0, scanned: 0, queries, message: "未搜到结果，稍后再试" };
@@ -231,7 +265,7 @@ index 必须是上面方括号里的编号；不相关的条目不要返回。`;
     role: profile.target_role || "",
     round: "",
     tags: [...new Set([...(c.tags || []), "外部面经", "情报"])].slice(0, 12),
-    metadata: { url: c.src.url, query: c.src.query, provider: "tavily", collected_at: now, hash: c.src.hash },
+    metadata: { url: c.src.url, query: c.src.query, provider: SEARCH_PROVIDER, collected_at: now, hash: c.src.hash },
     embedding: vectors[i] || null,
   }));
 
@@ -252,7 +286,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers });
   if (req.method !== "POST") return json({ ok: false, error: "method not allowed" }, 405, headers);
   if (!DASHSCOPE_KEY) return json({ ok: false, error: "服务端未配置模型密钥 DASHSCOPE_API_KEY" }, 200, headers);
-  if (!TAVILY_KEY) return json({ ok: false, error: "服务端未配置搜索密钥 TAVILY_API_KEY" }, 200, headers);
+  if (!SEARCH_PROVIDER) return json({ ok: false, error: "服务端未配置搜索密钥（BOCHA_API_KEY 或 TAVILY_API_KEY）" }, 200, headers);
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
