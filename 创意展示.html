@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>面镜 AI · 沉浸式 AI 模拟面试 + 私有面经知识库</title>
+<style>
+  :root{
+    --bg:#0b1020; --bg2:#0f1730; --card:#141d36; --line:rgba(255,255,255,.08);
+    --txt:#eaf0ff; --sub:#9aa7c7; --brand:#6d8bff; --brand2:#9b6dff; --accent:#36e0c8;
+    --amber:#ffb454;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    background:radial-gradient(1200px 700px at 80% -10%,rgba(155,109,255,.25),transparent 60%),
+               radial-gradient(1000px 600px at -10% 10%,rgba(109,139,255,.22),transparent 55%),
+               var(--bg);
+    color:var(--txt); line-height:1.7; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:0 22px}
+  .pill{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--sub);
+    border:1px solid var(--line);background:rgba(255,255,255,.03);padding:6px 14px;border-radius:999px}
+  .grad{background:linear-gradient(90deg,var(--brand),var(--brand2) 60%,var(--accent));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+
+  /* HERO */
+  header{padding:84px 0 64px;text-align:center}
+  header h1{font-size:clamp(34px,6vw,60px);line-height:1.12;font-weight:800;letter-spacing:-.5px;margin:22px 0 14px}
+  header .slogan{font-size:clamp(17px,2.4vw,22px);color:var(--sub);max-width:760px;margin:0 auto 14px}
+  header .intro{font-size:15.5px;color:var(--sub);max-width:720px;margin:0 auto 30px}
+  .cta{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+  .btn{display:inline-block;padding:13px 26px;border-radius:12px;font-weight:600;font-size:15px;text-decoration:none;transition:.2s}
+  .btn.primary{background:linear-gradient(90deg,var(--brand),var(--brand2));color:#fff;box-shadow:0 10px 30px rgba(109,139,255,.35)}
+  .btn.primary:hover{transform:translateY(-2px)}
+  .btn.ghost{border:1px solid var(--line);color:var(--txt)}
+  .btn.ghost:hover{border-color:var(--brand)}
+
+  .stats{display:flex;gap:34px;justify-content:center;flex-wrap:wrap;margin-top:46px}
+  .stat .n{font-size:30px;font-weight:800}
+  .stat .l{font-size:13px;color:var(--sub)}
+
+  /* SECTION */
+  section{padding:56px 0}
+  .eyebrow{color:var(--accent);font-weight:700;font-size:13px;letter-spacing:1.5px;text-transform:uppercase}
+  .h2{font-size:clamp(24px,3.6vw,34px);font-weight:800;margin:10px 0 8px;letter-spacing:-.3px}
+  .lead{color:var(--sub);max-width:760px;font-size:16px}
+
+  .grid{display:grid;gap:18px;margin-top:30px}
+  .g2{grid-template-columns:repeat(2,1fr)}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  @media(max-width:820px){.g2,.g3{grid-template-columns:1fr}}
+
+  .card{background:linear-gradient(180deg,var(--card),rgba(20,29,54,.6));border:1px solid var(--line);
+    border-radius:18px;padding:24px;transition:.25s}
+  .card:hover{transform:translateY(-4px);border-color:rgba(109,139,255,.4)}
+  .ic{width:46px;height:46px;border-radius:12px;display:grid;place-items:center;font-size:22px;margin-bottom:14px;
+    background:linear-gradient(135deg,rgba(109,139,255,.25),rgba(155,109,255,.25));border:1px solid var(--line)}
+  .card h3{font-size:18px;margin-bottom:8px}
+  .card p{color:var(--sub);font-size:14.5px}
+  .tag{display:inline-block;margin:10px 8px 0 0;font-size:12px;color:var(--accent);
+    border:1px solid rgba(54,224,200,.3);background:rgba(54,224,200,.08);padding:4px 10px;border-radius:999px}
+
+  .pain li{list-style:none;padding:14px 18px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.02);
+    margin-top:12px;color:var(--sub);font-size:15px}
+  .pain li b{color:var(--txt)}
+
+  /* RAG layers */
+  .layers{counter-reset:step}
+  .layer{display:flex;gap:16px;align-items:flex-start;padding:18px;border:1px solid var(--line);border-radius:16px;
+    background:rgba(255,255,255,.02);margin-top:14px}
+  .layer .num{counter-increment:step;flex:0 0 40px;height:40px;border-radius:10px;display:grid;place-items:center;font-weight:800;
+    background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff}
+  .layer .num::before{content:counter(step)}
+  .layer h4{font-size:16px;margin-bottom:4px}
+  .layer p{color:var(--sub);font-size:14.5px}
+
+  .value{background:linear-gradient(135deg,rgba(109,139,255,.12),rgba(54,224,200,.08));
+    border:1px solid var(--line);border-radius:22px;padding:34px}
+  .flow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:18px;color:var(--sub);font-size:14px}
+  .flow .step{padding:8px 14px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.03);color:var(--txt)}
+  .flow .arrow{color:var(--brand)}
+
+  .tech{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}
+  .chip{font-size:13px;color:var(--txt);border:1px solid var(--line);background:rgba(255,255,255,.03);
+    padding:8px 14px;border-radius:10px}
+
+  footer{padding:44px 0 60px;text-align:center;color:var(--sub);font-size:13px;border-top:1px solid var(--line);margin-top:40px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <span class="pill">🎯 创造力大赛参赛作品 · 创意产物展示</span>
+    <h1>面镜 AI<br><span class="grad">沉浸式 AI 模拟面试 + 私有面经知识库</span></h1>
+    <p class="slogan">像和真人面试官对话一样练习，越练越懂你，每一次都比上一次更有针对性。</p>
+    <p class="intro">一个集「虚拟面试官实时语音对话 + 私有化 RAG 面经知识库 + 成长复盘报告」于一体的网页端 AI 模拟面试系统，帮求职者把「找面经 → 模拟练习 → 复盘改进」收进一个闭环。</p>
+    <div class="cta">
+      <a class="btn primary" href="#features">查看核心功能</a>
+      <a class="btn ghost" href="#value">价值与意义</a>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="n grad">3 层</div><div class="l">私有知识库结构</div></div>
+      <div class="stat"><div class="n grad">实时</div><div class="l">流式语音对话</div></div>
+      <div class="stat"><div class="n grad">闭环</div><div class="l">弱项追踪成长</div></div>
+    </div>
+  </div>
+</header>
+
+<section id="problem">
+  <div class="wrap">
+    <div class="eyebrow">问题 & 用户</div>
+    <div class="h2">求职者缺的不是面经，而是「真练 + 真复盘」</div>
+    <p class="lead">看得多、练得少，没人帮你量化短板。面经散落各处、临场表达难提升、练完没有结构化反馈——这正是我们想解决的痛点。</p>
+    <ul class="pain">
+      <li><b>面向用户：</b>应届生、转行求职者，以及冲刺大厂 / 目标岗位、需要高频模拟的在职跳槽人群。</li>
+      <li><b>使用场景：</b>投递后正式面试前的集中备战；想针对某家公司某个岗位（如「字节 AI 产品经理」）做定向演练；面试后想复盘查漏。</li>
+      <li><b>当前痛点：</b>只能对镜自言自语或麻烦朋友，反馈主观难持续；面经要在知乎 / 牛客 / 公众号里大海捞针；练完没有评分，也不知道下次该重点练什么。</li>
+    </ul>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <div class="eyebrow">核心功能</div>
+    <div class="h2">三大能力，组成一套陪练闭环</div>
+    <div class="grid g3">
+      <div class="card">
+        <div class="ic">🎙️</div>
+        <h3>沉浸式虚拟面试官</h3>
+        <p>虚拟面试官形象 + 实时流式语音识别与合成，全程像真人对话；问题与转写在前端隐藏、仅后台留存用于生成报告，体验更专注。</p>
+        <span class="tag">实时 ASR/TTS</span><span class="tag">沉浸视频</span>
+      </div>
+      <div class="card">
+        <div class="ic">📚</div>
+        <h3>私有化 RAG 面经知识库</h3>
+        <p>按目标岗位自动联网搜集中文面经并清洗去重，结合个人简历做向量检索，让 AI 出题贴近真实岗位，问得更准、问得更深。</p>
+        <span class="tag">向量检索</span><span class="tag">越用越懂你</span>
+      </div>
+      <div class="card">
+        <div class="ic">📈</div>
+        <h3>成长复盘报告</h3>
+        <p>面试结束自动生成多维度评分，并对比历史记录指出「哪些弱项在重复、下一次该重点追问什么」，沉淀为长期成长记忆。</p>
+        <span class="tag">弱项追踪</span><span class="tag">闭环改进</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="rag">
+  <div class="wrap">
+    <div class="eyebrow">知识库结构</div>
+    <div class="h2">三层私有化 RAG，让 AI 真正了解你</div>
+    <div class="layers">
+      <div class="layer"><div class="num"></div><div><h4>外部面经自动搜集</h4><p>AI 根据目标岗位 / 公司联网搜集中文面经（知乎、公众号、牛客等），经大模型清洗去重后入库，并自动生成向量索引。</p></div></div>
+      <div class="layer"><div class="num"></div><div><h4>个人真实面经</h4><p>用户持续沉淀自己经历过的真实面试题、回答与复盘，形成专属的私有语料。</p></div></div>
+      <div class="layer"><div class="num"></div><div><h4>历史报告与弱项记忆</h4><p>本站历次模拟面试的报告、低分维度与改进建议自动回流知识库，作为下一轮出题与追问的依据。</p></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="value">
+  <div class="wrap">
+    <div class="eyebrow">价值与意义</div>
+    <div class="h2">让优质面试陪练，变得人人可及</div>
+    <div class="grid g2" style="margin-top:24px">
+      <div class="value">
+        <h3 style="font-size:19px;margin-bottom:8px">⚡ 效率提升</h3>
+        <p style="color:var(--sub);font-size:15px">把「找面经 → 模拟练习 → 复盘改进」整合进一个闭环，自动搜集 + 向量检索让出题更贴岗，结构化报告让每次练习都有明确改进方向。</p>
+        <div class="flow">
+          <span class="step">找面经</span><span class="arrow">→</span>
+          <span class="step">模拟练习</span><span class="arrow">→</span>
+          <span class="step">复盘改进</span><span class="arrow">↺</span>
+          <span class="step">越练越准</span>
+        </div>
+      </div>
+      <div class="value">
+        <h3 style="font-size:19px;margin-bottom:8px">🌍 社会价值</h3>
+        <p style="color:var(--sub);font-size:15px">用低成本 AI 陪练降低优质面试辅导门槛，让没有内推、缺少学长学姐资源的普通求职者也能获得接近真人陪练的练习与反馈，缩小求职信息差。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="tech">
+  <div class="wrap">
+    <div class="eyebrow">技术亮点</div>
+    <div class="h2">轻量、可落地的工程实现</div>
+    <p class="lead">围绕「真实感」与「个性化」做工程取舍，在体验、成本与可维护性之间取得平衡。</p>
+    <div class="tech">
+      <span class="chip">实时流式 ASR（语音转写）</span>
+      <span class="chip">稳定 TTS 语音合成</span>
+      <span class="chip">向量 Embedding + 语义检索 RAG</span>
+      <span class="chip">大模型清洗 / 去重 / 摘要</span>
+      <span class="chip">中文搜索源自动搜集</span>
+      <span class="chip">多维度评分与弱项闭环</span>
+      <span class="chip">数据本地优先 + 云端同步</span>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    面镜 AI · 沉浸式 AI 模拟面试 + 私有面经知识库 &nbsp;|&nbsp; 创造力大赛创意产物展示页
+  </div>
+</footer>
+
+</body>
+</html>
